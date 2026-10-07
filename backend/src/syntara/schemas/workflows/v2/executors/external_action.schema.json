@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://automation.example.com/schemas/workflows/v2/executors/external_action.schema.json",
+  "title": "External Plugin Action Parameters",
+  "description": "A generic installed plugin action. Publication resolves and pins its runtime route separately.",
+  "parameterSchema": {
+    "type": "object",
+    "required": ["step_revision_id"],
+    "properties": {
+      "step_revision_id": {
+        "type": "string",
+        "minLength": 69,
+        "maxLength": 256,
+        "pattern": "^[a-z0-9][a-z0-9.-]{2,190}:[a-f0-9]{64}$",
+        "description": "Installed plugin action revision selected for this workflow step."
+      },
+      "plugin_connection_id": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Optional project-scoped plugin connection identity."
+      },
+      "inputs": {
+        "type": "object",
+        "description": "Structured action inputs validated against the installed action at publication."
+      }
+    },
+    "additionalProperties": false
+  }
+}

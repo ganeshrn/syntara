@@ -18,6 +18,7 @@ from syntara.workflows.workflow_engine.models.workflow_definition import (
 
 _NODE_SETTINGS_CLASS: dict[str, type[NodeSettingsBase]] = {
     NodeType.HTTP_REQUEST: NodeSettingsFull,
+    NodeType.EXTERNAL_ACTION: NodeSettingsFull,
     NodeType.AAP_JOB_TEMPLATE: NodeSettingsFull,
     NodeType.AAP_WORKFLOW_JOB_TEMPLATE: NodeSettingsFull,
     NodeType.INTERNAL_ACTIVITY: NodeSettingsFull,

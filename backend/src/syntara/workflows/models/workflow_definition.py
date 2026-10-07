@@ -19,6 +19,7 @@ from syntara.workflows.workflow_engine.models.workflow_definition import (
     ConditionNodeParameters,
     ConvergeNodeParameters,
     DoWhileLoopParameters,
+    ExternalActionParameters,
     ForEachLoopParameters,
     NodeSettingsBase,
     NodeSettingsCof,
@@ -75,6 +76,14 @@ class HTTPRequestNode(WorkflowNodeBase):
 
     type: Literal["http_request"]
     parameters: APIExecutorParameters
+    settings: NodeSettingsFull | None = None
+
+
+class ExternalActionNode(WorkflowNodeBase):
+    """One installed plugin action, pinned when its workflow revision publishes."""
+
+    type: Literal["external_action"]
+    parameters: ExternalActionParameters
     settings: NodeSettingsFull | None = None
 
 
@@ -146,6 +155,7 @@ _AllNodeTypes = (
     AAPJobTemplateNode
     | AAPWorkflowJobTemplateNode
     | HTTPRequestNode
+    | ExternalActionNode
     | AgenticNode
     | ScriptNode
     | ApprovalNode

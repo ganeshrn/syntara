@@ -111,6 +111,17 @@
       "since": "2.0.0"
     },
     {
+      "type": "external_action",
+      "name": "External Plugin Action",
+      "description": "Run an installed plugin action through Syntara's generic Execution Plane route",
+      "labels": {
+        "category": "executor"
+      },
+      "schema_ref": "../executors/external_action.schema.json",
+      "deprecated": false,
+      "since": "2.0.0"
+    },
+    {
       "type": "agentic",
       "name": "Task Agent",
       "description": "Execute task agent tasks with asynchronous completion",

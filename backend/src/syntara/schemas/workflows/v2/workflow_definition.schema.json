@@ -281,6 +281,26 @@
             {
               "properties": {
                 "type": {
+                  "const": "external_action"
+                },
+                "parameters": {
+                  "$ref": "executors/external_action.schema.json#/parameterSchema"
+                },
+                "settings": {
+                  "$ref": "common-definitions.schema.json#/$defs/nodeSettingsFull"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/node_base"
+            },
+            {
+              "properties": {
+                "type": {
                   "const": "agentic"
                 },
                 "parameters": {

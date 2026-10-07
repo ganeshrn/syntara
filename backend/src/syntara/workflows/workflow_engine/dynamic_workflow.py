@@ -1568,6 +1568,10 @@ class OrchestratorWorkflow(WorkflowConvergeMixin, WorkflowApprovalMixin):
         node_id = node.id
         node_type = node.type
 
+        if node_type == NodeType.EXTERNAL_ACTION:
+            msg = "External plugin action runtime resolution is not configured"
+            raise ApplicationError(msg, type="ExternalActionRuntimeUnavailable", non_retryable=True)
+
         if node_type in self._EXECUTOR_ACTIVITY_MAP:
             extra_args: list[Any] | None = None
             if node_type in self._AAP_NODE_TYPES:

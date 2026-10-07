@@ -176,6 +176,7 @@ class NodeType(str, Enum):
     HTTP_REQUEST = "http_request"
     INTERNAL_ACTIVITY = "internal_activity"
     SCRIPT = "script"
+    EXTERNAL_ACTION = "external_action"
 
 
 def resolve_trigger_node(
@@ -380,6 +381,30 @@ class APIExecutorParameters(TemplateAwareBaseModel):
             msg = f"URL scheme '{parsed.scheme}' is not allowed. Only http:// and https:// are supported."
             raise SafeValueError(msg)
         return v
+
+
+class ExternalActionParameters(BaseModel):
+    """A generic installed plugin action selected by immutable revision.
+
+    The workflow stores only the installed action revision, an optional project
+    connection identity, and structured inputs. Publication resolves and pins
+    the image and runtime route in a separate durable binding; workflow authors
+    cannot provide an image, command, policy, grant, or credential here.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    step_revision_id: str = Field(
+        min_length=69,
+        max_length=256,
+        pattern=r"^[a-z0-9][a-z0-9.-]{2,190}:[a-f0-9]{64}$",
+        description="Installed plugin action revision selected for this workflow step.",
+    )
+    plugin_connection_id: uuid.UUID | None = Field(
+        default=None,
+        description="Optional project-scoped plugin connection identity.",
+    )
+    inputs: dict[str, Any] = Field(default_factory=dict, description="Structured action inputs.")
 
 
 class IntegrationConnectionConfig(BaseModel):

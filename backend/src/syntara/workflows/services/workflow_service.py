@@ -6,12 +6,13 @@ HTTP/API concerns in the FastAPI endpoints.
 
 import asyncio
 import threading
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 import structlog
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -32,6 +33,13 @@ from syntara.credentials.models.credential import Credential
 from syntara.credentials.models.credential_type import CredentialType
 from syntara.metrics.dependencies import get_metrics_recorder
 from syntara.metrics.types import ComponentLabel, MetricType
+from syntara.plugin_platform.exceptions import WorkflowActionBindingError
+from syntara.plugin_platform.services.plugin_connection_service import PluginConnectionService
+from syntara.plugin_platform.services.registry_service import PluginRegistryService
+from syntara.plugin_platform.services.workflow_action_binding import (
+    ExternalActionReference,
+    WorkflowActionBindingService,
+)
 from syntara.workflows.audit.workflow_lifecycle import WorkflowAction, WorkflowLifecycleEvent
 from syntara.workflows.audit.workflow_version import (
     WorkflowVersionCreatedEvent,
@@ -134,6 +142,74 @@ class WorkflowService(UserReferenceResolverMixin, BaseService):
         """Initialize WorkflowService with database session and user context."""
         super().__init__(session, user, convert_resource_mixin=WorkflowConvertResourceMixin())
         self.opa_client = opa_client
+
+    async def _bind_external_actions_for_publication(
+        self,
+        workflow_version: WorkflowVersion,
+        workflow_definition: dict[str, Any],
+    ) -> None:
+        """Pin every generic external action route in the publish transaction.
+
+        A workflow author supplies only an installed action revision, optional
+        project connection identity, and structured inputs. The binding service
+        resolves all runnable details from trusted installed state before the
+        published-version pointer can move.
+        """
+        references: list[ExternalActionReference] = []
+        raw_nodes = workflow_definition.get("nodes", [])
+        if not isinstance(raw_nodes, list):
+            return
+        for raw_node in raw_nodes:
+            if not isinstance(raw_node, Mapping) or raw_node.get("type") != "external_action":
+                continue
+            try:
+                parameters = raw_node.get("parameters", {})
+                if not isinstance(parameters, Mapping):
+                    parameters = {}
+                references.append(
+                    ExternalActionReference.model_validate(
+                        {
+                            "node_id": raw_node.get("id"),
+                            **parameters,
+                        }
+                    )
+                )
+            except (TypeError, ValidationError) as error:
+                raise WorkflowPublishValidationError(
+                    ValidationResult.from_findings(
+                        [
+                            ValidationFinding(
+                                severity=ValidationSeverity.error,
+                                category=ValidationCategory.invalid_reference,
+                                message="External plugin action definition is invalid",
+                            )
+                        ]
+                    )
+                ) from error
+
+        if not references:
+            return
+
+        binding_service = WorkflowActionBindingService(
+            self.session,
+            PluginRegistryService(self.session),
+            PluginConnectionService(self.session),
+        )
+        try:
+            await binding_service.bind_for_publication(workflow_version.id, references)
+        except WorkflowActionBindingError as error:
+            raise WorkflowPublishValidationError(
+                ValidationResult.from_findings(
+                    [
+                        ValidationFinding(
+                            severity=ValidationSeverity.error,
+                            category=ValidationCategory.invalid_reference,
+                            message=f"External plugin action is not publishable: {error.code}",
+                            node_id=error.node_id,
+                        )
+                    ]
+                )
+            ) from error
 
     @staticmethod
     def _emit_lifecycle_event(
@@ -1398,6 +1474,8 @@ class WorkflowService(UserReferenceResolverMixin, BaseService):
             stale_tool_findings = await validate_workflow_references(
                 self.session, workflow_definition, workflow.project_id
             )
+
+        await self._bind_external_actions_for_publication(target_version, definition)
 
         if workflow.published_version_id is not None and workflow.published_version_id != target_version.id:
             unpublish_event = WorkflowPublishEvent(

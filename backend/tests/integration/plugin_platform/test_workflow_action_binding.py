@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -33,6 +34,7 @@ from syntara.plugin_platform.services.workflow_action_binding import (
     WorkflowActionBindingService,
 )
 from syntara.workflows.models import Workflow, WorkflowVersion
+from syntara.workflows.services.workflow_service import WorkflowService
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -220,3 +222,85 @@ async def test_published_binding_persists_server_resolved_route_after_plugin_is_
     assert request["workItem"]["stepRevisionId"] == action_id
     assert request["workItem"]["imageDigest"] == stored.image_digest
     assert request["workItem"]["inputs"] == {"message": "hello"}
+
+
+@pytest.mark.asyncio
+async def test_workflow_publication_pins_an_external_action_node(
+    test_db_session: AsyncSession,
+    test_user: User,
+    test_project_id: UUID,
+) -> None:
+    """Workflow publication writes the action binding before its pointer changes."""
+    registry = PluginRegistryService(test_db_session)
+    await registry.install_verified(_candidate(), actor_id=test_user.id)
+    action_id = "syntara.echo.echo:" + "b" * 64
+    action = await registry.resolve_enabled_action(action_id)
+    assert action.integration_type_revision_id is not None
+    connection = await PluginConnectionService(test_db_session).create(
+        PluginConnectionCreate(
+            name="Publication test connection",
+            project_id=test_project_id,
+            integration_type_revision_id=action.integration_type_revision_id,
+            endpoint_kind="https",
+        ),
+        actor_id=test_user.id,
+    )
+
+    workflow = Workflow(
+        id=uuid4(),
+        name="published-external-action",
+        current_version=1,
+        created_by=test_user.id,
+        project_id=test_project_id,
+    )
+    version = WorkflowVersion(
+        id=uuid4(),
+        workflow_id=workflow.id,
+        version=1,
+        schema_version="2.0.0",
+        workflow_definition={
+            "schema_version": "2.0.0",
+            "name": workflow.name,
+            "triggers": [{"id": "start", "type": "manual_trigger", "parameters": {}}],
+            "nodes": [
+                {
+                    "id": "echo_message",
+                    "type": "external_action",
+                    "parameters": {
+                        "step_revision_id": action_id,
+                        "plugin_connection_id": str(connection.id),
+                        "inputs": {"message": "hello"},
+                    },
+                }
+            ],
+            "edges": [{"from": "start", "to": "echo_message"}],
+        },
+        created_by=test_user.id,
+    )
+    test_db_session.add(workflow)
+    test_db_session.add(version)
+    await test_db_session.commit()
+
+    webhook_service = MagicMock()
+    webhook_service.return_value.sync_webhook_triggers = AsyncMock()
+    service = WorkflowService(test_db_session, test_user)
+    with (
+        patch("syntara.workflows.services.workflow_service.WebhookTriggerService", webhook_service),
+        patch.object(WorkflowService, "_sync_scheduled_triggers", new_callable=AsyncMock),
+        patch(
+            "syntara.workflows.services.workflow_service.get_system_continue_on_failure",
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
+    ):
+        published_workflow, published_version, _warning = await service.publish_workflow_version(workflow.id, 1)
+
+    binding = (
+        await test_db_session.exec(
+            select(WorkflowActionBinding).where(WorkflowActionBinding.workflow_version_id == published_version.id)
+        )
+    ).one()
+    assert published_workflow.published_version_id == published_version.id
+    assert binding.node_id == "echo_message"
+    assert binding.step_revision_id == action_id
+    assert binding.plugin_connection_id == connection.id
