@@ -94,7 +94,9 @@ async def test_catalog_index_verification_uses_the_selected_policy_and_exact_dig
     ]
     assert decision.summary["verifier"] == "cosign"
     assert decision.summary["transparencyLogRequired"] is True
-    assert decision.summary["signerKeySha256"].startswith("sha256:")
+    signer_key_fingerprint = decision.summary["signerKeySha256"]
+    assert isinstance(signer_key_fingerprint, str)
+    assert signer_key_fingerprint.startswith("sha256:")
 
 
 async def test_plugin_artifact_verification_rejects_a_namespace_outside_the_pinned_policy() -> None:
@@ -176,11 +178,13 @@ async def test_subprocess_runner_uses_an_ephemeral_key_and_never_inherits_host_d
         )
     )
 
-    assert captured["args"] == (
+    arguments = captured["args"]
+    assert isinstance(arguments, tuple)
+    assert arguments == (
         "/test/bin/cosign",
         "verify",
         "--key",
-        captured["args"][3],
+        arguments[3],
         "--output",
         "json",
         "--insecure-ignore-tlog",

@@ -23,7 +23,7 @@ import tempfile
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 from urllib.parse import urlsplit
 
 from syntara.core.lib.url_validation import validate_host_url
@@ -192,7 +192,7 @@ class PinnedCosignKeyTrustPolicy:
         for namespace in plugin_namespaces:
             _validate_namespace(namespace)
         object.__setattr__(self, "plugin_namespaces", plugin_namespaces)
-        if not isinstance(self.require_transparency_log, bool):
+        if not isinstance(cast("object", self.require_transparency_log), bool):
             msg = "Cosign trust policy transparency-log mode must be boolean"
             raise TypeError(msg)
         encoded_public_key = self.public_key_pem.encode("utf-8")

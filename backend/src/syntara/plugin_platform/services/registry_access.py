@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 from syntara.plugin_platform.exceptions import CatalogSourceConfigurationError
 from syntara.plugin_platform.source_profile import STANDARD_CATALOG_SOURCE_MODE, CatalogSourceMode
@@ -69,16 +69,17 @@ def validate_registry_authorization(value: str | None) -> None:
         raise CatalogSourceConfigurationError(msg)
 
 
-def safe_trust_summary(summary: Mapping[str, str | int | bool | None]) -> dict[str, str | int | bool | None]:
+def safe_trust_summary(summary: object) -> dict[str, str | int | bool | None]:
     """Admit bounded inspection evidence while refusing secret-like data."""
     if not isinstance(summary, Mapping):
         msg = "Catalog trust decision has an invalid summary"
         raise CatalogSourceConfigurationError(msg)
-    if len(summary) > _MAX_TRUST_SUMMARY_FIELDS:
+    raw_summary = cast("Mapping[object, object]", summary)
+    if len(raw_summary) > _MAX_TRUST_SUMMARY_FIELDS:
         msg = "Catalog trust decision has too many summary fields"
         raise CatalogSourceConfigurationError(msg)
     safe_summary: dict[str, str | int | bool | None] = {}
-    for key, value in summary.items():
+    for key, value in raw_summary.items():
         if (
             not isinstance(key, str)
             or _TRUST_SUMMARY_KEY_PATTERN.fullmatch(key) is None

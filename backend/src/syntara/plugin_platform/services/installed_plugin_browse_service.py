@@ -176,9 +176,12 @@ class InstalledPluginBrowseService(BaseService):
         if not plugin_ids:
             return {}
         statement = (
-            select(InstalledPluginAction.plugin_installation_id, func.count(InstalledPluginAction.id))
+            select(
+                col(InstalledPluginAction.plugin_installation_id),
+                func.count(col(InstalledPluginAction.id)),
+            )
             .where(col(InstalledPluginAction.plugin_installation_id).in_(plugin_ids))
-            .group_by(InstalledPluginAction.plugin_installation_id)
+            .group_by(col(InstalledPluginAction.plugin_installation_id))
         )
         return dict((await self.session.exec(statement)).all())
 

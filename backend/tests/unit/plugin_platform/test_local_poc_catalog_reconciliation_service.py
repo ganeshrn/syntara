@@ -66,7 +66,9 @@ def _plugin_artifact_request(**overrides: object) -> PluginArtifactTrustRequest:
 async def test_local_poc_registry_adapter_allows_only_anonymous_loopback_access() -> None:
     resolver = LocalPocCatalogRegistryAuthorizationResolver()
 
-    assert await resolver.resolve_authorization(_access_request()) is None
+    authorization = await resolver.resolve_authorization(_access_request())
+
+    assert authorization is None
 
     with pytest.raises(CatalogSourceConfigurationError):
         await resolver.resolve_authorization(_access_request(registry_origin="http://registry.example.test"))

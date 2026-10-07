@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 class LocalPocCatalogRegistryAuthorizationResolver:
     """Allow anonymous pull only for the fixed local development source profile."""
 
-    async def resolve_authorization(self, request: CatalogRegistryAuthorizationRequest) -> None:
+    async def resolve_authorization(self, request: CatalogRegistryAuthorizationRequest) -> str | None:
         """Return anonymous access after defending the adapter's narrow boundary."""
         try:
             validate_local_poc_registry_access(
@@ -56,6 +56,7 @@ class LocalPocCatalogRegistryAuthorizationResolver:
             )
         except ValueError as exc:
             raise CatalogSourceConfigurationError(str(exc)) from exc
+        return None
 
 
 class LocalPocCatalogIndexTrustEvaluator:

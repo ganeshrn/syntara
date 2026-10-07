@@ -29,7 +29,7 @@ def test_authorization_resolver_output_rejects_non_string_value() -> None:
 )
 def test_trust_summary_refuses_secret_or_unbounded_values(summary: object) -> None:
     with pytest.raises(CatalogSourceConfigurationError):
-        safe_trust_summary(summary)  # type: ignore[arg-type]
+        safe_trust_summary(summary)
 
 
 def test_trust_summary_accepts_small_safe_inspection_evidence() -> None:
