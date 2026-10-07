@@ -1,6 +1,6 @@
 """Suite 22 — Credential Storage: Preseed Duration KPI (22.12).
 
-Test 22.12: Application startup with 5 managed credential types preseed
+Test 22.12: Application startup with managed credential types preseed
     KPI: Preseed Duration < 2s added to startup
     Measurement: Startup timing
     Validation:
@@ -54,7 +54,7 @@ async def session_factory(
 
 
 class TestPreseedDuration:
-    """22.12 — Preseed 5 managed credential types on startup.
+    """22.12 — Preseed managed credential types on startup.
 
     Calls preseed_credential_types() directly against the test database
     to measure the wall-clock cost that would be added to application
@@ -64,7 +64,7 @@ class TestPreseedDuration:
         - First preseed completes in < 2s
         - Repeat (idempotent) preseed completes in < 2s
         - Repeat runs are no slower than first run
-        - All 5 credential types exist after preseed
+        - All managed credential types exist after preseed
         - Exact field/injector definitions match GA_CREDENTIAL_TYPES
     """
 
@@ -76,7 +76,7 @@ class TestPreseedDuration:
         # --- Phase 1: First preseed (may INSERT) ---
         first_duration_ms = await _timed_preseed(session_factory)
 
-        # Verify all 5 types exist
+        # Verify every managed type exists
         types_after_first = await _fetch_managed_types(session_factory)
         assert len(types_after_first) == EXPECTED_TYPE_COUNT, (
             f"Expected {EXPECTED_TYPE_COUNT} managed types after first preseed, "

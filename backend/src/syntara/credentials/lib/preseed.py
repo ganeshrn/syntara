@@ -1,6 +1,6 @@
-"""Preseed GA managed credential types.
+"""Preseed managed credential types.
 
-Creates 5 managed credential types if they don't exist, updates them
+Creates managed credential types if they don't exist, updates them
 in place if they do. Uses INSERT ... ON CONFLICT DO UPDATE for atomicity —
 safe under concurrent execution.
 
@@ -237,6 +237,104 @@ GA_CREDENTIAL_TYPES: list[dict[str, Any]] = [
         # extra_vars keys are auto-collected by credential_scrubber._build_credential_keys()
         "injectors": {
             "extra_vars": {"auth_type": "url", "secret_url": "{{url}}"},
+            "env": {},
+            "file": {},
+        },
+    },
+    {
+        "name": "OCI Registry",
+        "description": "Pull authentication for an OCI registry such as Quay",
+        "inputs": {
+            "fields": [
+                {
+                    "id": "registry_origin",
+                    "label": "Registry origin",
+                    "type": "string",
+                    "secret": False,
+                    "help_text": "HTTPS origin this credential may authenticate to, for example https://quay.example.com.",
+                    "placeholder": "https://quay.example.com",
+                },
+                {
+                    "id": "username",
+                    "label": "Username",
+                    "type": "string",
+                    "secret": False,
+                    "help_text": "Registry or Quay robot-account username. Optional when using a bearer token.",
+                    "placeholder": "acme+plugin-reader",
+                },
+                {
+                    "id": "password",
+                    "label": "Password",
+                    "type": "string",
+                    "secret": True,
+                    "help_text": "Registry or Quay robot-account password. Encrypted at rest.",
+                    "placeholder": "Enter registry password",
+                },
+                {
+                    "id": "bearer_token",
+                    "label": "Bearer pull token",
+                    "type": "string",
+                    "secret": True,
+                    "help_text": "Scoped registry pull token. Optional when using a username and password.",
+                    "placeholder": "Enter scoped pull token",
+                },
+            ],
+            "required": ["registry_origin"],
+            "mutually_exclusive": [
+                ["bearer_token"],
+                ["username", "password"],
+            ],
+            "required_one_of": [
+                ["bearer_token"],
+                ["username", "password"],
+            ],
+            "required_together": [
+                ["username", "password"],
+            ],
+        },
+        "injectors": {
+            "extra_vars": {
+                "auth_type": "oci_registry",
+                "oci_registry_origin": "{{registry_origin}}",
+                "oci_registry_username": "{{username}}",
+                "oci_registry_password": "{{password}}",
+                "oci_registry_bearer_token": "{{bearer_token}}",
+            },
+            "env": {},
+            "file": {},
+        },
+    },
+    {
+        "name": "OCI Registry CA Bundle",
+        "description": "Custom certificate authority bundle for one OCI registry",
+        "inputs": {
+            "fields": [
+                {
+                    "id": "registry_origin",
+                    "label": "Registry origin",
+                    "type": "string",
+                    "secret": False,
+                    "help_text": "HTTPS origin this CA bundle may trust, for example https://quay.example.com.",
+                    "placeholder": "https://quay.example.com",
+                },
+                {
+                    "id": "ca_bundle",
+                    "label": "CA bundle",
+                    "type": "string",
+                    "secret": True,
+                    "multiline": True,
+                    "help_text": "PEM-encoded certificate authority bundle. Encrypted at rest.",
+                    "placeholder": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
+                },
+            ],
+            "required": ["registry_origin", "ca_bundle"],
+        },
+        "injectors": {
+            "extra_vars": {
+                "auth_type": "oci_registry_ca_bundle",
+                "oci_registry_origin": "{{registry_origin}}",
+                "oci_registry_ca_bundle": "{{ca_bundle}}",
+            },
             "env": {},
             "file": {},
         },

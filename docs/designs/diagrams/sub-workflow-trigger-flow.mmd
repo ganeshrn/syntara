@@ -1,0 +1,15 @@
+graph LR
+    A[Parent reaches<br/>Execute Sub-workflow] --> B{Allowed and callable?}
+    B -->|No| X[Fail closed]
+    B -->|Yes| C[Resolve latest<br/>published child]
+    C --> D[Pin exact<br/>child revision]
+    D --> E[Temporal starts<br/>child workflow]
+
+    F[Child: Sub-workflow Trigger<br/>receives typed inputs] --> G[Child steps run]
+    G --> H[Typed child result]
+    E --> F
+    H --> I[Return result to<br/>Execute Sub-workflow]
+    I --> J[Next parent step]
+
+    N[Native Temporal control flow<br/>No plugin image or EP container]
+    D -.-> N

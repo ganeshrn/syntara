@@ -169,6 +169,20 @@ BUILTIN_POLICIES: list[PolicyInfo] = [
     # settings
     PolicyInfo("setting", "read", roles=("admin", "auditor")),
     PolicyInfo("setting", "write", roles=("admin",)),
+    # plugin catalog sources (system-level administrator configuration)
+    PolicyInfo("plugin_source", "create", roles=("admin",)),
+    PolicyInfo("plugin_source", "read", roles=("admin",)),
+    PolicyInfo("plugin_source", "update", roles=("admin",)),
+    PolicyInfo("plugin_source", "delete", roles=("admin",)),
+    PolicyInfo("plugin_source", "enable", roles=("admin",)),
+    PolicyInfo("plugin_source", "disable", roles=("admin",)),
+    PolicyInfo("plugin_source", "reconcile", roles=("admin",)),
+    # plugin catalog is a non-secret, verified discovery projection
+    PolicyInfo("plugin_catalog", "read", roles=("admin", "auditor", "user")),
+    PolicyInfo("plugin_catalog", "hydrate_documentation", roles=("admin",)),
+    # installed plugin registry is a non-secret active execution snapshot
+    PolicyInfo("plugin_registry", "read", roles=("admin", "auditor", "user")),
+    PolicyInfo("plugin_registry", "install", roles=("admin",)),
     # authz query
     PolicyInfo("authz", "query", roles=("admin",)),
     # admin revocation

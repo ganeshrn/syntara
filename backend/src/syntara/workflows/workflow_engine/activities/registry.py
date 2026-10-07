@@ -23,6 +23,7 @@ from syntara.workflows.workflow_engine.activities.approval_activity import (
 )
 from syntara.workflows.workflow_engine.activities.approver_resolution_activity import resolve_approvers_activity
 from syntara.workflows.workflow_engine.activities.condition import condition
+from syntara.workflows.workflow_engine.activities.container_activity import execute_container_activity
 from syntara.workflows.workflow_engine.activities.converge import converge
 from syntara.workflows.workflow_engine.activities.credential_resolution_activity import resolve_workflow_credentials
 from syntara.workflows.workflow_engine.activities.eda_trigger import eda_trigger
@@ -57,6 +58,7 @@ _TEMPORAL_ACTIVITIES: list[Callable[..., Any]] = [
     fail_detached_approval_activity,
     resolve_approvers_activity,
     condition,
+    execute_container_activity,
     converge,
     eda_trigger,
     switch,

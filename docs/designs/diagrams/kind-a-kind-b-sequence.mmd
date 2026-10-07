@@ -1,0 +1,27 @@
+sequenceDiagram
+  participant W as Workflow
+  participant T as Temporal
+  participant S as Syntara activity worker
+  participant R as Installed registry
+  participant E as Execution Plane
+  participant P as Isolated pod
+  participant X as Allowed external API
+
+  W->>T: Run pinned step revision
+  T->>S: Generic Container activity with pinned IDs
+  S->>R: Resolve revision, policy, integration and credentials
+
+  alt Kind A: GitHub Create issue
+    R-->>S: Platform HTTP runner digest plus declarative mapping
+  else Kind B: Custom risk scorer
+    R-->>S: Plugin-owned image digest plus workload ABI
+  end
+
+  S->>E: Submit server-generated work item
+  E->>P: Start pinned image with effective grant
+  P->>X: Request through approved egress path
+  X-->>P: Response
+  P-->>E: ABI result and heartbeat
+  E-->>S: Durable terminal result
+  S-->>T: Typed activity result
+  T-->>W: Continue to the next node

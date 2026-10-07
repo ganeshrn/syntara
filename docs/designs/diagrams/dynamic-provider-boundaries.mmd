@@ -1,0 +1,28 @@
+flowchart LR
+  N0["n8n reference"] --> NCB["Publisher callback<br/>inside backend process"]
+  NCB --> NEXT["External API"]
+
+  W0["Windmill reference"] --> WQ["Job queue"]
+  WQ --> WW["Worker job"]
+  WW --> WEXT["External API"]
+
+  S0["Approved Syntara v1"] --> SUI["Trusted form renderer"]
+  SUI --> SFP["FormProviderService"]
+  SFP -->|"preferred"| SD["Declarative interpreter"]
+  SFP -->|"escape hatch"| SQ["Provider queue"]
+  SQ --> SW["Digest-pinned<br/>sandbox worker"]
+  SD --> SGW["Credential Broker and<br/>provider gateway"]
+  SW -->|"scoped capability"| SGW
+  SGW --> SEXT["Approved external endpoint"]
+
+  NOTE["No Temporal or runtime EP work item.<br/>No publisher code in Syntara or browser."]
+  SFP -.-> NOTE
+
+  classDef unsafe fill:#fff0e5,stroke:#c45a00,color:#3a2415;
+  classDef reference fill:#eef3f8,stroke:#58728a,color:#1d2a35;
+  classDef approved fill:#e7f1ff,stroke:#1f6feb,color:#152238;
+  classDef sandbox fill:#eef8ee,stroke:#2d7d32,color:#173a19;
+  class N0,NEXT,W0,WQ,WW,WEXT reference;
+  class NCB unsafe;
+  class S0,SUI,SFP,SD,SGW,SEXT,NOTE approved;
+  class SQ,SW sandbox;

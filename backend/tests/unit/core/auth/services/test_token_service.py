@@ -108,6 +108,9 @@ def token_service() -> TokenService:
             jwt_issuer="https://localhost:8000",
             jwt_access_token_lifetime_minutes=15,
             jwt_refresh_token_lifetime_hours=8,
+            execution_plane_service_client_id="syntara-orchestration",
+            execution_plane_service_jwt_audience="execution-plane",
+            execution_plane_service_token_lifetime_seconds=300,
         )
         key_manager = KeyManager()
         key_manager._private_key = ec.generate_private_key(ec.SECP256R1())
@@ -116,6 +119,24 @@ def token_service() -> TokenService:
 
 class TestTokenCreation:
     """Tests for token creation."""
+
+    def test_create_execution_plane_token_has_only_fixed_project_scope(self, token_service: TokenService) -> None:
+        """The workflow bridge cannot broaden its EP audience or permission set."""
+        project_id = uuid4()
+
+        token = token_service.create_execution_plane_token(project_id)
+        payload = jwt.decode(
+            token,
+            token_service._key_manager.get_public_key_pem(),
+            algorithms=["ES256"],
+            audience="execution-plane",
+            issuer="https://localhost:8000",
+        )
+
+        assert payload["client_id"] == "syntara-orchestration"
+        assert payload["project_id"] == str(project_id)
+        assert payload["scope"] == "work-items:submit work-items:read work-items:cancel"
+        assert jwt.get_unverified_header(token)["typ"] == "ep+jwt"
 
     def test_create_access_token_returns_string(self, token_service: TokenService) -> None:
         """Test that create_access_token returns a JWT string."""

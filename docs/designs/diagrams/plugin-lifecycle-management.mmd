@@ -1,0 +1,18 @@
+flowchart LR
+    PUB[Published immutable artifact] --> CAT[Catalog visible]
+    CAT --> STAGE[Staged<br/>verified exact digest]
+    STAGE --> ENABLED[Enabled<br/>available in builder]
+    ENABLED --> DISABLED[Disabled<br/>not selectable]
+    DISABLED --> ENABLED
+    ENABLED --> NEWER[New revision staged]
+    NEWER --> ENABLED
+    ENABLED --> REVOKED[Locally revoked<br/>security denial]
+    DISABLED --> REMOVE[Remove only when<br/>no references or retention hold]
+    REVOKED --> REMOVE
+
+    classDef normal fill:#ebfbee,stroke:#37b24d,color:#2b8a3e;
+    classDef review fill:#fff4e6,stroke:#f08c00,color:#e67700;
+    classDef risk fill:#fff5f5,stroke:#f03e3e,color:#c92a2a;
+    class PUB,CAT,STAGE review;
+    class ENABLED,DISABLED,NEWER,REMOVE normal;
+    class REVOKED risk;

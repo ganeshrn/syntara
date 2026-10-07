@@ -30,6 +30,7 @@
     "gen:local:authz": "openapi-typescript ../../../backend/src/syntara/schemas/authz/openapi.yaml --output ./src/authz-api.ts --default-non-nullable false",
     "gen:local:roles": "openapi-typescript ../../../backend/src/syntara/schemas/authz/role.openapi.yaml --output ./src/roles-api.ts --default-non-nullable false",
     "gen:local:policies": "openapi-typescript ../../../backend/src/syntara/schemas/authz/policy.openapi.yaml --output ./src/policies-api.ts --default-non-nullable false",
+    "gen:local:plugin-platform": "openapi-typescript ../../../backend/src/syntara/schemas/plugin_platform/openapi.yaml --output ./src/plugin-platform-api.ts --default-non-nullable false",
     "gen:local:role-assignments": "openapi-typescript ../../../backend/src/syntara/schemas/authz/role_assignment.openapi.yaml --output ./src/role-assignments-api.ts --default-non-nullable false",
     "gen:local:service-accounts": "openapi-typescript ../../../backend/src/syntara/schemas/service_accounts/openapi.yaml --output ./src/service-accounts-api.ts --default-non-nullable false",
     "sync-examples": "cp -r ../../../backend/tests/integration/workflows/examples ../syntara-mock-api/src",

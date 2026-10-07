@@ -25,6 +25,25 @@ from syntara.files.models import FileMetadata
 from syntara.identity_providers.models.identity_provider import IdentityProvider
 from syntara.identity_providers.models.idp_group_mapping import IdpGroupMappingEntry
 from syntara.integrations.models.integration import Integration, IntegrationProjectAssignment
+from syntara.plugin_platform.models.catalog import (
+    CatalogPluginAsset,
+    CatalogPluginVersion,
+    PluginSource,
+    PluginSourceReconciliation,
+)
+from syntara.plugin_platform.models.plugin_connection import PluginConnection
+from syntara.plugin_platform.models.registry import (
+    InstalledPlugin,
+    InstalledPluginAction,
+    InstalledPluginCredentialType,
+    InstalledPluginIntegrationType,
+    PluginGenerationMember,
+    PluginRegistryGeneration,
+    PluginRegistryState,
+    RunnerProfile,
+    RunnerProfileRevision,
+)
+from syntara.plugin_platform.models.workflow_action_binding import WorkflowActionBinding
 from syntara.service_accounts.models.service_account import ServiceAccount
 from syntara.service_accounts.models.service_account_credential import ServiceAccountCredential
 from syntara.settings.models.runtime_setting import RuntimeSetting
@@ -62,6 +81,21 @@ ALL_MODELS = [
     IdpGroupMappingEntry,
     Integration,
     IntegrationProjectAssignment,
+    PluginRegistryState,
+    PluginRegistryGeneration,
+    RunnerProfile,
+    RunnerProfileRevision,
+    WorkflowActionBinding,
+    PluginConnection,
+    InstalledPlugin,
+    InstalledPluginAction,
+    InstalledPluginCredentialType,
+    InstalledPluginIntegrationType,
+    PluginGenerationMember,
+    PluginSource,
+    PluginSourceReconciliation,
+    CatalogPluginVersion,
+    CatalogPluginAsset,
     RuntimeSetting,
     SettingCategoryModel,
     Secret,

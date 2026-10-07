@@ -580,6 +580,41 @@ class TokenService:
 
         return token, jti, exp
 
+    def create_execution_plane_token(self, project_id: UUID | str) -> str:
+        """Create a short-lived, fixed-scope token for one EP project submission.
+
+        This is intentionally not a general service-token minting API. The
+        audience, client identity, and scopes are fixed by Syntara settings so a
+        workflow activity cannot widen its authority while preparing a work item.
+        """
+        try:
+            project = UUID(str(project_id))
+        except (TypeError, ValueError) as error:
+            msg = "project_id must be a UUID for Execution Plane dispatch"
+            raise ValueError(msg) from error
+
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(seconds=self._settings.execution_plane_service_token_lifetime_seconds)
+        payload = {
+            "iss": self._settings.jwt_issuer,
+            "aud": self._settings.execution_plane_service_jwt_audience,
+            "iat": now,
+            "exp": expires_at,
+            "client_id": self._settings.execution_plane_service_client_id,
+            "project_id": str(project),
+            "scope": "work-items:submit work-items:read work-items:cancel",
+        }
+        headers = {
+            "kid": self._key_manager.key_id,
+            "typ": "ep+jwt",
+        }
+        return jwt.encode(
+            payload,
+            self._key_manager.get_private_key(),
+            algorithm=JWT_ALGORITHM,
+            headers=headers,
+        )
+
     def decode_token(self, token: str, *, token_type: str = "access") -> TokenPayload:  # noqa: S107
         """Decode and validate a JWT token.
 

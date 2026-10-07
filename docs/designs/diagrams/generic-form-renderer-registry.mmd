@@ -1,0 +1,38 @@
+flowchart TB
+  STEP["Installed step revision<br/>input schema + UI schema + provider bindings"] --> CARD["Step configuration card<br/>shared labels, help, errors, and state"]
+  CARD --> RENDER["StepFormRenderer<br/>walks the field tree"]
+  RENDER --> RESOLVE{"Resolve component"}
+  RESOLVE -->|"Explicit versioned ID"| REGISTRY["Platform InputComponentRegistry"]
+  RESOLVE -->|"No explicit ID"| FALLBACK["Approved JSON Schema fallback"]
+  FALLBACK --> REGISTRY
+  RESOLVE -->|"Unknown or incompatible"| REJECT["Reject installation<br/>or show disabled diagnostic"]
+
+  REGISTRY --> FIELD["Trusted PatternFly field"]
+  FIELD --> MODE{"Needs remote data?"}
+  MODE -->|"No"| VALUE["Draft value<br/>stable ID + cached label"]
+  VALUE --> RECHECK["Publish and runtime revalidation"]
+
+  MODE -->|"Yes"| API["Generic form-resolution API"]
+  API --> SERVICE["FormProviderService<br/>authorization + immutable binding"]
+  SERVICE --> PROVIDER{"Installed provider mode"}
+  PROVIDER -->|"preferred"| DECL["Declarative interpreter"]
+  PROVIDER -->|"approved escape hatch"| SANDBOX["Digest-pinned provider<br/>in separate sandbox service"]
+  DECL --> GATEWAY["Credential Broker and<br/>trusted provider gateway"]
+  SANDBOX -->|"scoped capability"| GATEWAY
+  GATEWAY --> REMOTE["GitHub or AAP API"]
+  REMOTE --> RESULT["Bounded, normalized<br/>options or schema"]
+  RESULT --> VALUE
+
+  NOTE["Plugins reference component IDs and provider bindings.<br/>They never supply browser code.<br/>Sandboxed providers never run in Syntara or Temporal."]
+  REGISTRY -.-> NOTE
+
+  classDef installed fill:#eef3f8,stroke:#58728a,color:#1d2a35;
+  classDef frontend fill:#e7f1ff,stroke:#1f6feb,color:#152238;
+  classDef backend fill:#eef8ee,stroke:#2d7d32,color:#173a19;
+  classDef sandbox fill:#fff0e5,stroke:#c45a00,color:#3a2415;
+  classDef rejected fill:#fff0e5,stroke:#c45a00,color:#3a2415;
+  class STEP installed;
+  class CARD,RENDER,RESOLVE,FALLBACK,REGISTRY,FIELD,MODE,VALUE frontend;
+  class API,SERVICE,PROVIDER,DECL,GATEWAY,REMOTE,RESULT,RECHECK backend;
+  class SANDBOX sandbox;
+  class REJECT rejected;

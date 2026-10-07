@@ -1,0 +1,19 @@
+flowchart TB
+    ROOT[plugin.yaml<br/>identity, version, targets,<br/>logical workload image] --> COMPILE[SDK compiler]
+    TARGETS[Action and trigger manifests<br/>schemas and operations<br/>dynamic UI extensions later] --> COMPILE
+    ASSETS[Optional assets<br/>documentation, icons, schemas,<br/>mappings, credential recipes] --> COMPILE
+    IMAGE[Custom workload image<br/>resolved to immutable digest] --> COMPILE
+
+    COMPILE --> RELEASE[Immutable plugin<br/>metadata artifact]
+    RELEASE --> META[Metadata layers<br/>canonical descriptor and assets]
+    RELEASE --> BINDING[Reference to one plugin<br/>workload image by digest]
+    RELEASE --> EVIDENCE[Attached evidence<br/>signature, provenance, SBOM]
+    RELEASE --> INDEX[Signed catalog entry<br/>name, version, docs, capabilities]
+    IMAGE --> BINDING
+
+    classDef source fill:#e7f5ff,stroke:#1c7ed6,color:#1864ab;
+    classDef output fill:#fff4e6,stroke:#f08c00,color:#e67700;
+    classDef release fill:#ebfbee,stroke:#37b24d,color:#2b8a3e;
+    class ROOT,TARGETS,ASSETS,IMAGE source;
+    class COMPILE,RELEASE release;
+    class META,BINDING,EVIDENCE,INDEX output;

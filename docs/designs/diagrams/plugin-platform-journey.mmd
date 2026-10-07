@@ -1,0 +1,23 @@
+flowchart LR
+    DEV[Plugin author<br/>YAML or Python] --> SDK[Syntara Plugin SDK<br/>validate and compile]
+    SDK --> ART[Plugin metadata artifact<br/>manifest, schemas, documentation]
+    SDK --> IMAGE[Optional custom workload<br/>image pinned by digest]
+    ART --> EVIDENCE[Signature and optional<br/>provenance or SBOM]
+    ART --> QUAY[Local Quay<br/>artifact and signed catalog index]
+    QUAY --> SOURCE[Catalog source reconciles<br/>into local search projection]
+    SOURCE --> CAT[Discover and inspect<br/>docs without running image]
+    CAT --> REVIEW[Admin review<br/>identity, evidence, capabilities]
+    REVIEW --> INSTALL[Same direct-digest<br/>verification and install]
+    IMAGE --> INSTALL
+    INSTALL --> LIB[Installed plugin library<br/>approved workflow steps]
+    LIB --> BUILDER[Workflow builder<br/>select step and provide<br/>static schema inputs]
+    BUILDER -. later .-> FORMS[Dynamic fields and<br/>custom UI deferred]
+
+    classDef author fill:#e7f5ff,stroke:#1c7ed6,color:#1864ab;
+    classDef artifact fill:#fff4e6,stroke:#f08c00,color:#e67700;
+    classDef control fill:#ebfbee,stroke:#37b24d,color:#2b8a3e;
+    classDef future fill:#f1f3f5,stroke:#868e96,color:#495057;
+    class DEV,SDK author;
+    class ART,IMAGE,EVIDENCE,QUAY artifact;
+    class SOURCE,CAT,REVIEW,INSTALL,LIB,BUILDER control;
+    class FORMS future;

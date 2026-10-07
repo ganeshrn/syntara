@@ -138,6 +138,7 @@ class ActivityName(StrEnum):
     HTTP_REQUEST = "execute_http_request_activity"
     INTERNAL_ACTIVITY = "execute_internal_activity"
     SCRIPT = "execute_script_activity"
+    CONTAINER = "execute_container_activity"
     # Internal
     CREDENTIAL_RESOLUTION = "resolve_workflow_credentials"
     INTEGRATION_RESOLUTION = "resolve_workflow_integration"

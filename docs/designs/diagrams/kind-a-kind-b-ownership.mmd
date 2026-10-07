@@ -1,0 +1,25 @@
+flowchart TB
+  A0["KIND A<br/>declarative platform runner"] --> A1["GitHub: Create issue<br/>schemas + HTTP mapping"]
+  A0 --> A2["Platform chooses image<br/>http-runner@sha256:aaa"]
+  A1 --> A3["Installed step revision<br/>mapping + runner digest + grant"]
+  A2 --> A3
+
+  B0["KIND B<br/>custom workload image"] --> B1["Custom: Score change risk<br/>schemas + workload ABI"]
+  B0 --> B2["Plugin author supplies image<br/>risk-scorer@sha256:bbb"]
+  B1 --> B3["Installed step revision<br/>image digest + ABI + grant"]
+  B2 --> B3
+
+  A3 --> C["One generic Temporal<br/>Container activity"]
+  B3 --> C
+  C --> EP["Execution Plane<br/>same scheduling and policy"]
+  EP --> PA["Isolated pod<br/>platform runner interprets mapping"]
+  EP --> PB["Isolated pod<br/>custom image runs author code"]
+  PA --> OUT["Same workload ABI<br/>result, heartbeat, cancellation"]
+  PB --> OUT
+
+  classDef kindA fill:#e7f1ff,stroke:#1f6feb,color:#152238;
+  classDef kindB fill:#fff0e5,stroke:#c45a00,color:#3a2415;
+  classDef shared fill:#eef8ee,stroke:#2d7d32,color:#173a19;
+  class A0,A1,A2,A3,PA kindA;
+  class B0,B1,B2,B3,PB kindB;
+  class C,EP,OUT shared;

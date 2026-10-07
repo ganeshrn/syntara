@@ -1,0 +1,45 @@
+name: syntara-plugin-quay
+
+services:
+  postgres:
+    image: docker.io/library/postgres:15-alpine@sha256:8f1f9748236a87718c0e2a46ea1bad4f6caa52c7f5612ed57d0cf9d2fc314468
+    environment:
+      POSTGRES_DB: quay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/bootstrap.sh first.}
+      POSTGRES_USER: quay
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quay -d quay"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init/01-enable-pg-trgm.sql:/docker-entrypoint-initdb.d/01-enable-pg-trgm.sql:ro
+
+  redis:
+    image: docker.io/library/redis:7-alpine@sha256:f8d15882ba108587477ce13c00ab0551933a84138427b7cc9abadfbe45ffd973
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  quay:
+    image: quay.io/projectquay/quay:3.16.2@sha256:32c48d996eb55603f9f3b77eb23d54e68359f0df339f62f92f60d1d5560ba967
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./config:/conf/stack:ro
+      - quay-storage:/datastorage
+    ports:
+      # This is intentionally an unsafe development-only HTTP endpoint.
+      # It must remain bound to loopback and must not be reused for a shared
+      # registry, an OpenShift deployment, or production Syntara sources.
+      - "127.0.0.1:8443:8080"
+
+volumes:
+  postgres-data:
+  quay-storage:

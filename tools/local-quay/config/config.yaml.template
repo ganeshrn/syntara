@@ -1,0 +1,39 @@
+AUTHENTICATION_TYPE: Database
+BUILDLOGS_REDIS:
+  host: redis
+  port: 6379
+# The local-PoC registry is loopback-only and intentionally permits public
+# smoke artifacts. It is not a production or shared-registry configuration.
+CREATE_PRIVATE_REPO_ON_PUSH: false
+DATABASE_SECRET_KEY: __QUAY_DATABASE_SECRET_KEY__
+DB_URI: postgresql://quay:__POSTGRES_PASSWORD__@postgres:5432/quay
+DEFAULT_TAG_EXPIRATION: 2w
+DISTRIBUTED_STORAGE_CONFIG:
+  local:
+    - LocalStorage
+    - storage_path: /datastorage
+DISTRIBUTED_STORAGE_DEFAULT_LOCATIONS:
+  - local
+DISTRIBUTED_STORAGE_PREFERENCE:
+  - local
+FEATURE_ANONYMOUS_ACCESS: true
+FEATURE_APP_SPECIFIC_TOKENS: true
+FEATURE_BUILD_SUPPORT: false
+FEATURE_DIRECT_LOGIN: true
+FEATURE_GENERAL_OCI_SUPPORT: true
+FEATURE_MAILING: false
+FEATURE_SECURITY_SCANNER: false
+FEATURE_USER_CREATION: true
+FEATURE_USER_INITIALIZE: true
+# The local-PoC profile intentionally uses loopback HTTP so contributors can
+# validate registry, catalog, and UI wiring without installing a development
+# CA or configuring Cosign. Production sources require HTTPS and trust policy.
+PREFERRED_URL_SCHEME: http
+SECRET_KEY: __QUAY_SECRET_KEY__
+SERVER_HOSTNAME: localhost:8443
+SETUP_COMPLETE: true
+SUPER_USERS:
+  - syntara-admin
+USER_EVENTS_REDIS:
+  host: redis
+  port: 6379

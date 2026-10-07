@@ -103,6 +103,13 @@ _ERROR_RESPONSE_EXAMPLES: dict[int, dict[str, object]] = {
         "code": "INTERNAL_ERROR",
         "retryable": True,
     },
+    503: {
+        "type": "https://api.example.com/errors/service-unavailable",
+        "title": "Service Unavailable",
+        "detail": "The requested service is not currently available",
+        "code": "SERVICE_UNAVAILABLE",
+        "retryable": True,
+    },
 }
 
 
@@ -342,7 +349,7 @@ def safe_value_error_handler(request: Request, exc: "SafeValueError") -> JSONRes
     """
     logger.error("Safe value error", exc_info=exc)
 
-    detail = str(exc) if str(exc) else "Invalid input value"
+    detail = str(exc) or "Invalid input value"
 
     return create_problem_details_response(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

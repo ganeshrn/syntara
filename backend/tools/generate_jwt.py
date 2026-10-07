@@ -46,6 +46,7 @@ import json
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import structlog
@@ -56,6 +57,9 @@ from syntara.auth.session import create_session_store
 from syntara.core.config.base import get_settings
 from syntara.core.database.session import AsyncSessionLocal
 from syntara.core.models import User
+
+if TYPE_CHECKING:
+    from structlog.types import Processor
 
 # Valid --key choices; paths are resolved at runtime from settings/environment.
 _KEY_CHOICES = ("primary", "backup")
@@ -165,7 +169,7 @@ async def generate_tokens(
 
     # Generate access token
     access_token = token_service.create_access_token(
-        user_id=user.id,
+        subject_id=user.id,
         username=user.username,
         email=user.email or "",
     )
@@ -234,20 +238,20 @@ async def main() -> int:
     # (including filter_by_level) at import time. We must override the full
     # processor chain here, not just the factory, because PrintLogger lacks
     # the .disabled attribute that filter_by_level requires.
-    _processors = [
+    processors: list[Processor] = [
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.dev.ConsoleRenderer(),
     ]
     if "--json" in sys.argv:
         logging.disable(logging.CRITICAL)
         structlog.configure(
-            processors=_processors,
+            processors=processors,
             logger_factory=structlog.PrintLoggerFactory(file=io.StringIO()),
         )
     else:
         logging.basicConfig(stream=sys.stderr, level=logging.WARNING, force=True)
         structlog.configure(
-            processors=_processors,
+            processors=processors,
             logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
         )
 

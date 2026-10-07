@@ -1394,6 +1394,69 @@ class S2STLSSettings(BaseSettings):
         return self
 
 
+class ExecutionPlaneSettings(BaseSettings):
+    """Trusted control-plane settings for the separately deployed Execution Plane."""
+
+    execution_plane_url: str | None = Field(
+        default=None,
+        description="Internal Execution Plane API origin. Omit to disable generic container dispatch.",
+    )
+    execution_plane_service_client_id: str = Field(
+        default="syntara-orchestration",
+        min_length=1,
+        max_length=200,
+        description="Syntara service client identity admitted by the Execution Plane.",
+    )
+    execution_plane_service_jwt_audience: str = Field(
+        default="execution-plane",
+        min_length=1,
+        max_length=200,
+        description="Audience for short-lived Syntara-to-EP service tokens.",
+    )
+    execution_plane_service_token_lifetime_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=600,
+        description="Lifetime for a Syntara-to-EP project-scoped service token.",
+    )
+    execution_plane_request_timeout_seconds: float = Field(
+        default=10.0,
+        gt=0,
+        le=60,
+        description="HTTP timeout for one Execution Plane API request.",
+    )
+    execution_plane_poll_interval_seconds: float = Field(
+        default=2.0,
+        ge=0.1,
+        le=30,
+        description="Delay between Execution Plane work-item status reads while a Temporal activity waits.",
+    )
+
+    @field_validator("execution_plane_url")
+    @classmethod
+    def validate_execution_plane_url(cls, value: str | None) -> str | None:
+        """Accept only an absolute HTTP(S) service origin configured by an operator."""
+        if value is None:
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.query or parsed.fragment:
+            msg = "execution_plane_url must be an absolute HTTP(S) origin without query or fragment"
+            raise ValueError(msg)
+        return value.rstrip("/")
+
+
+class PluginPlatformSettings(BaseSettings):
+    """Deployment-owned switches for explicitly unsafe plugin-platform development aids."""
+
+    plugin_platform_local_poc_enabled: bool = Field(
+        default=False,
+        description=(
+            "Allow the loopback-only unsigned local-PoC catalog source. "
+            "Never enable in shared, hosted, OpenShift, or production environments."
+        ),
+    )
+
+
 # =============================================================================
 # Telemetry Configuration
 # =============================================================================
@@ -1957,6 +2020,8 @@ class Settings(
     LoggingSettings,
     TemporalSettings,
     S2STLSSettings,
+    ExecutionPlaneSettings,
+    PluginPlatformSettings,
     WorkflowEngineSettings,
     JWTSettings,
     ToolManagerSettings,

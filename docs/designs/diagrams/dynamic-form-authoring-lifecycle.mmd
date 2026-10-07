@@ -1,0 +1,58 @@
+sequenceDiagram
+  participant U as Workflow author
+  participant UI as Trusted form renderer
+  participant S as Syntara form resolver
+  participant B as Credential Broker
+  participant D as Declarative interpreter
+  participant P as Provider Sandbox
+  participant G as Provider gateway
+  participant X as AAP or GitHub API
+  participant E as Temporal and runtime EP
+
+  U->>UI: Drag an installed step onto the canvas
+  UI->>S: Load pinned schema, UI, and provider bindings
+  S-->>UI: Inert form definition
+
+  opt Connection is missing or expired
+    U->>UI: Connect or reconnect
+    UI->>B: Start approved authorization flow
+    B->>X: Authorize user
+    X-->>B: Callback with authorization code
+    B->>B: Encrypt tokens and pin endpoint revision
+    B-->>UI: Opaque connection reference
+  end
+
+  U->>UI: Focus, search, or change a dependency
+  UI->>S: Revision, field path, connection, declared dependencies, query, cursor
+  S->>S: Authorize and resolve pinned provider mode, endpoint, and grant
+  alt Declarative provider
+    S->>D: Bounded operation and filtered dependencies
+    D->>G: Relative read request
+  else Sandboxed provider
+    S->>P: Exact provider digest, operation, filtered inputs, scoped capability
+    P->>G: Relative read request using scoped capability
+  end
+  G->>B: Resolve approved short-lived authentication
+  B-->>G: Attach authentication without exposing root secret
+  G->>X: Bounded read-only request to approved endpoint
+  X-->>G: Resource data or remote field metadata
+  alt Declarative provider
+    G-->>D: Bounded upstream response
+    D-->>S: Normalized options or schema fragment
+  else Sandboxed provider
+    G-->>P: Bounded upstream response
+    P-->>S: Provider ABI options or schema fragment
+  end
+  S->>S: Validate, normalize, bound, and cache result
+  S-->>UI: Stable values, labels, source version, cursor
+  UI-->>U: Render or update dependent fields
+
+  U->>UI: Save draft
+  Note over UI,S: Draft stores stable IDs, cached labels, and source version, never tokens
+  U->>S: Publish workflow
+  S->>S: Re-run the same pinned provider mode to revalidate references and schema
+  S-->>U: Immutable workflow revision pinned
+
+  Note over U,E: Temporal and runtime EP are not called while editing or revalidating the form
+  U->>S: Start the published workflow
+  S->>E: Generic Container activity with runtime credential handle

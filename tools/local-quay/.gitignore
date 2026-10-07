@@ -1,0 +1,6 @@
+.env
+podman-auth.json
+certs/
+cosign/
+cosign-docker-config/
+config/config.yaml

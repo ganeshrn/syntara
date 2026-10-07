@@ -489,6 +489,7 @@ import syntara.aap.exceptions  # noqa: E402
 import syntara.core.storage_exceptions  # noqa: E402
 import syntara.credentials.exceptions  # noqa: E402
 import syntara.integrations.exceptions  # noqa: E402
+import syntara.plugin_platform.exceptions  # noqa: E402
 import syntara.service_accounts.exceptions  # noqa: E402, F401
 
 # Register decorated exceptions automatically
