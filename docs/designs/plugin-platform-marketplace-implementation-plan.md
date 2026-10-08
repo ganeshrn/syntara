@@ -579,6 +579,27 @@ Turn the proven contract and artifact core into a stable community authoring pro
 - Add a local provider harness that invokes the same provider ABI, bounds, fixtures, broker/gateway fakes, and diagnostics as the cluster service without pretending to reproduce Kubernetes isolation.
 - Document safe embedding in Python services, other developer tools, CI, IDEs, and a future hosted service.
 
+### Deferred custom-workload build convenience
+
+Do not add a combined container-image build path before the Phase 7 local
+catalog UI flow is proven and one minimal custom-workload plugin has completed
+an Execution Plane run from a pinned image. The current metadata-only SDK build
+and explicit image-binding path remain the supported implementation boundary.
+
+After those gates, add an opt-in `syntara-plugin build --with-workload` path
+backed by the shared SDK settings model. It must build a publisher-owned OCI
+image with Podman, push it, capture the registry-returned immutable digest, and
+write the normal metadata OCI archive bound to that digest. It must report both
+digests and retain the separate metadata `publish` operation. Settings discovery
+prefers an explicit `--settings` file, then `.syntara-plugin.yaml` in the
+current directory, then the manifest directory; the first match wins and CLI
+options override it. Settings contain no secrets, and the laptop's default
+platform is never used as an implicit Execution Plane target.
+
+The complete SDK decision, settings precedence, security boundaries, test
+requirements, and cleanup gate are recorded in the
+[SDK ADR 0006](../../../syntara-plugin-sdk/.sdlc/adrs/0006-deferred-custom-workload-build-ux.md).
+
 ### Verification
 
 - Cross-adapter golden tests proving Python API, CLI, gRPC, and LSP return identical diagnostics and deterministic artifacts.

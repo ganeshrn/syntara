@@ -2426,6 +2426,23 @@ The CLI, optional local gRPC server, LSP adapter, and hosted-service wrapper rem
 
 The current SDK is a useful implementation seed but not yet this boundary. The reusable `init`, `build`, `push`, and registration behavior currently lives in the [CLI module](../../../syntara-plugin-sdk/tools/syntara_tools/cli.py), while the [step base classes](../../../syntara-plugin-sdk/sdk-python/syntara_sdk/step.py) and [local runner](../../../syntara-plugin-sdk/sdk-python/syntara_sdk/runner.py) form a separate runtime package. Move reusable behavior behind public authoring services; keep argument parsing, stdout/stderr, prompts, and exit-code mapping in the CLI adapter. Preserve the small runtime dependency set rather than merging the authoring toolchain into every workload image.
 
+#### Deferred combined custom-workload build
+
+The current SDK `build` produces only a reviewable metadata OCI archive. It
+does not build or push publisher workload images. This remains the supported
+boundary until the local catalog UI flow is proven and a minimal custom-workload
+plugin has run through the Execution Plane from one pinned image.
+
+After those proof gates, the SDK may add an opt-in one-command path that builds
+the author-owned image with Podman, pushes it, records the registry-returned
+digest in the metadata archive, and prints both image and metadata identities.
+It must retain the metadata-only build and explicit image-binding paths for CI
+and offline use. A versioned non-secret settings model supplies the equivalent
+of semantic CLI options; the CLI overrides the selected settings file and
+never reads secrets from it. The precise precedence, security boundaries,
+implementation tests, and removal criteria for temporary helper scripts are
+defined in [SDK ADR 0006](../../../syntara-plugin-sdk/.sdlc/adrs/0006-deferred-custom-workload-build-ux.md).
+
 #### Contract bundle: one grammar for IDEs and agents
 
 The SDK distributes one immutable **Syntara Contract Bundle** for each supported manifest contract version. This bundle is the only source of truth for plugin grammar. IDE extensions, language servers, CLI commands, Python callers, hosted services, and agent adapters must consume this bundle and the same SDK validator; none may maintain a separate interpretation of the manifest.
