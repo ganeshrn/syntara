@@ -175,12 +175,14 @@ class OrchestratorWorkflow(WorkflowConvergeMixin, WorkflowApprovalMixin):
 
         self._project_id: str = ""
         self._created_by_user_id: str = ""
+        self._workflow_version_id: str = ""
         if workflow_metadata:
             for ns_key, ns_data in workflow_metadata.items():
                 self.resolver.set_namespace(ns_key, ns_data)
             wf_ctx = workflow_metadata.get("workflow_context", {})
             self._project_id = wf_ctx.get("workflow", {}).get("project_id", "")
             self._created_by_user_id = wf_ctx.get("execution", {}).get("created_by_user_id", "")
+            self._workflow_version_id = wf_ctx.get("execution", {}).get("workflow_version_id", "")
 
         self.node_inputs: dict[str, dict[str, Any]] = {}
         self.node_control_data: dict[str, dict[str, Any]] = {}
@@ -1071,6 +1073,7 @@ class OrchestratorWorkflow(WorkflowConvergeMixin, WorkflowApprovalMixin):
         NodeType.CONDITION: ActivityName.CONDITION,
         NodeType.SWITCH: ActivityName.SWITCH,
         NodeType.AGENTIC: ActivityName.AGENTIC,
+        NodeType.EXTERNAL_ACTION: ActivityName.CONTAINER,
     }
 
     async def _execute_executor_node(
@@ -1553,9 +1556,48 @@ class OrchestratorWorkflow(WorkflowConvergeMixin, WorkflowApprovalMixin):
         await self._resolve_and_inject_integration(node, resolved_parameters)
 
         try:
+            if node.type == NodeType.EXTERNAL_ACTION:
+                return await self._execute_external_action(node, resolved_parameters, timeout_seconds)
             return await self._dispatch_node_to_executor(node, resolved_parameters, graph, timeout_seconds)
         finally:
             self._scrub_activity_credentials(resolved_parameters)
+
+    async def _execute_external_action(
+        self,
+        node: ActivityNode,
+        resolved_parameters: dict[str, Any],
+        timeout_seconds: int,
+    ) -> dict[str, Any]:
+        """Dispatch one published external action without exposing its route to the workflow."""
+        workflow_version_id = getattr(self, "_workflow_version_id", "")
+        project_id = getattr(self, "_project_id", "")
+        inputs = resolved_parameters.get("inputs")
+        if (
+            not isinstance(workflow_version_id, str)
+            or not workflow_version_id
+            or not isinstance(project_id, str)
+            or not project_id
+        ):
+            msg = "External plugin action runtime resolution is not configured"
+            raise ApplicationError(msg, type="ExternalActionRuntimeUnavailable", non_retryable=True)
+        if not isinstance(inputs, dict):
+            msg = "External plugin action inputs are invalid"
+            raise ApplicationError(msg, type="ContainerRequestInvalid", non_retryable=True)
+        invocation = {
+            "kind": "PublishedExternalActionInvocation",
+            "workflowVersionId": workflow_version_id,
+            "nodeId": node.id,
+            "inputs": inputs,
+            "timeoutSeconds": timeout_seconds,
+        }
+        return await self._execute_executor_node(
+            node,
+            NodeType.EXTERNAL_ACTION,
+            invocation,
+            node.outputs,
+            timeout_seconds=timeout_seconds + self._TEMPORAL_MARGIN,
+            extra_args=[project_id],
+        )
 
     async def _dispatch_node_to_executor(
         self,
@@ -1567,10 +1609,6 @@ class OrchestratorWorkflow(WorkflowConvergeMixin, WorkflowApprovalMixin):
         """Route node to the appropriate execution handler."""
         node_id = node.id
         node_type = node.type
-
-        if node_type == NodeType.EXTERNAL_ACTION:
-            msg = "External plugin action runtime resolution is not configured"
-            raise ApplicationError(msg, type="ExternalActionRuntimeUnavailable", non_retryable=True)
 
         if node_type in self._EXECUTOR_ACTIVITY_MAP:
             extra_args: list[Any] | None = None

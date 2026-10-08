@@ -14,11 +14,28 @@ from temporalio.exceptions import ApplicationError, CancelledError
 
 from syntara.auth.services.token_service import TokenService
 from syntara.core.config.base import Settings, get_settings
+from syntara.core.database.session import AsyncSessionLocal
+from syntara.plugin_platform.services.published_action_composer import (
+    PublishedActionReference,
+    PublishedActionWorkloadComposer,
+    ServerResolvedActionContext,
+)
+from syntara.plugin_platform.services.registry_service import PluginRegistryService
+from syntara.plugin_platform.services.workflow_action_binding import WorkflowActionBindingResolver
 from syntara.workflows.clients.execution_plane_client import ExecutionPlaneClient, ExecutionPlaneClientError
 from syntara.workflows.workflow_engine.models.workflow_definition import ActivityName
 
 _ACTIVE_STATES = frozenset({"pending", "claimed", "dispatched", "cancel_requested"})
 _WORKFLOW_ID_NAMESPACE = "syntara-container-work-item"
+_PUBLISHED_INVOCATION_KIND = "PublishedExternalActionInvocation"
+_LOCAL_POC_INTEGRATION_HANDLE = "local-poc-credentialless"
+_LOCAL_POC_CAPABILITY_GRANT_ID = "local-poc-credentialless"
+_LOCAL_POC_EXECUTION_POLICY_ID = "local-poc-credentialless"
+_LOCAL_POC_POLICY_REVISION = "v1"
+
+# Tests replace this with a transaction-bound database factory. The activity
+# itself only reads immutable publication data and never persists credentials.
+_session_factory = AsyncSessionLocal
 
 
 def _stable_work_item_identity() -> tuple[str, UUID]:
@@ -30,6 +47,72 @@ def _stable_work_item_identity() -> tuple[str, UUID]:
     )
     correlation_id = uuid5(NAMESPACE_URL, stable_source)
     return f"container-{correlation_id}", correlation_id
+
+
+def _is_published_action_invocation(value: Mapping[str, Any]) -> bool:
+    """Recognize the narrow workflow-to-activity reference envelope."""
+    return value.get("kind") == _PUBLISHED_INVOCATION_KIND
+
+
+async def _compose_local_poc_workload_request(
+    invocation: Mapping[str, Any],
+    *,
+    project_id: str,
+    invocation_id: str,
+    workflow_run_id: str,
+) -> dict[str, Any]:
+    """Resolve one credentialless local-PoC action from its published binding.
+
+    The workflow supplies only its own immutable version/node reference and
+    structured input. This deliberately admits no connection, endpoint,
+    credential, policy, image, or capability selection from workflow data.
+    """
+    settings = get_settings()
+    if not (settings.plugin_platform_local_poc_enabled and settings.plugin_platform_local_poc_execution_enabled):
+        msg = "External plugin action runtime resolution is not configured"
+        raise ApplicationError(msg, type="ExternalActionRuntimeUnavailable", non_retryable=True)
+
+    workflow_version_id = invocation.get("workflowVersionId")
+    node_id = invocation.get("nodeId")
+    inputs = invocation.get("inputs")
+    timeout_seconds = invocation.get("timeoutSeconds")
+    if (
+        not isinstance(workflow_version_id, str)
+        or not isinstance(node_id, str)
+        or not isinstance(inputs, Mapping)
+        or isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, int)
+        or timeout_seconds < 1
+    ):
+        msg = "External action invocation is invalid"
+        raise ApplicationError(msg, type="ContainerRequestInvalid", non_retryable=True)
+    try:
+        workflow_version = UUID(workflow_version_id)
+        UUID(project_id)
+    except ValueError as error:
+        msg = "External action invocation has an invalid workflow or project identity"
+        raise ApplicationError(msg, type="ContainerRequestInvalid", non_retryable=True) from error
+
+    async with _session_factory() as session:
+        binding_resolver = WorkflowActionBindingResolver(session, PluginRegistryService(session))
+        action = await binding_resolver.resolve_published_action(workflow_version, node_id)
+        if action.integration_type_revision_id is not None:
+            msg = "Local-PoC execution accepts only credentialless, integration-free actions"
+            raise ApplicationError(msg, type="LocalPocCredentiallessOnly", non_retryable=True)
+        execution_context = ServerResolvedActionContext(
+            invocation_id=invocation_id,
+            workflow_run_id=workflow_run_id,
+            integration_handle=_LOCAL_POC_INTEGRATION_HANDLE,
+            capability_grant_id=_LOCAL_POC_CAPABILITY_GRANT_ID,
+            execution_policy_id=_LOCAL_POC_EXECUTION_POLICY_ID,
+            policy_revision=_LOCAL_POC_POLICY_REVISION,
+            timeout_seconds=timeout_seconds,
+        )
+        return await PublishedActionWorkloadComposer(binding_resolver).compose(
+            PublishedActionReference(workflow_version_id=workflow_version, node_id=node_id),
+            execution_context,
+            inputs,
+        )
 
 
 def _validate_workload_request(workload_request: Mapping[str, Any]) -> None:
@@ -119,6 +202,15 @@ async def execute_container_activity(
     supports only inline object results; the broker and object-result path land
     as separate, explicitly gated increments.
     """
+    request_id, correlation_id = _stable_work_item_identity()
+    if _is_published_action_invocation(workload_request):
+        activity_info = activity.info()
+        workload_request = await _compose_local_poc_workload_request(
+            workload_request,
+            project_id=project_id,
+            invocation_id=request_id,
+            workflow_run_id=activity_info.workflow_run_id or "unknown-run",
+        )
     _validate_workload_request(workload_request)
     try:
         project = UUID(project_id)
@@ -126,7 +218,6 @@ async def execute_container_activity(
         msg = "External action project scope is invalid"
         raise ApplicationError(msg, type="ContainerRequestInvalid", non_retryable=True) from error
 
-    request_id, correlation_id = _stable_work_item_identity()
     settings = get_settings()
     client = _build_client(settings)
     try:

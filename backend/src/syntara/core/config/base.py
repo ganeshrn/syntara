@@ -1455,6 +1455,14 @@ class PluginPlatformSettings(BaseSettings):
             "Never enable in shared, hosted, OpenShift, or production environments."
         ),
     )
+    plugin_platform_local_poc_execution_enabled: bool = Field(
+        default=False,
+        description=(
+            "Allow only credentialless, integration-free installed plugin actions to execute through the "
+            "local-PoC bridge. Requires plugin_platform_local_poc_enabled and must never be enabled in "
+            "shared, hosted, OpenShift, or production environments."
+        ),
+    )
 
 
 # =============================================================================

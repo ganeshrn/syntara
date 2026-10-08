@@ -129,6 +129,36 @@ async def test_external_action_execution_fails_closed_until_runtime_context_exis
     node = ActivityNode("create_issue", NodeType.EXTERNAL_ACTION, {})
 
     with pytest.raises(ApplicationError) as raised:
-        await workflow._dispatch_node_to_executor(node, {}, MagicMock(), timeout_seconds=60)
+        await workflow._execute_external_action(node, {"inputs": {}}, timeout_seconds=60)
 
     assert raised.value.type == "ExternalActionRuntimeUnavailable"
+
+
+@pytest.mark.asyncio
+async def test_external_action_dispatches_only_a_published_reference() -> None:
+    """Temporal receives no action image, integration route, policy, or credential data."""
+    workflow = OrchestratorWorkflow.__new__(OrchestratorWorkflow)
+    workflow._workflow_version_id = str(uuid4())
+    workflow._project_id = str(uuid4())
+    node = ActivityNode("create_issue", NodeType.EXTERNAL_ACTION, {})
+
+    with patch.object(
+        workflow,
+        "_execute_executor_node",
+        new_callable=AsyncMock,
+        return_value={"output": {"issue": 7}},
+    ) as execute:
+        result = await workflow._execute_external_action(node, {"inputs": {"title": "Example"}}, timeout_seconds=60)
+
+    assert result == {"output": {"issue": 7}}
+    call = execute.await_args
+    assert call is not None
+    invocation = call.args[2]
+    assert invocation == {
+        "kind": "PublishedExternalActionInvocation",
+        "workflowVersionId": workflow._workflow_version_id,
+        "nodeId": "create_issue",
+        "inputs": {"title": "Example"},
+        "timeoutSeconds": 60,
+    }
+    assert call.kwargs["extra_args"] == [workflow._project_id]
