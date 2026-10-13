@@ -35,6 +35,41 @@ make dev
 make -C backend run-all
 ```
 
+## Plugin marketplace proof of concept
+
+The `feature/plugin-platform-sdk-marketplace` branch demonstrates the developer workflow for catalog-backed custom
+plugins and step types. The Syntara container build consumes the Plugin SDK as a local build context, so clone the
+repositories as siblings with the names shown below.
+
+```bash
+mkdir syntara-marketplace
+cd syntara-marketplace
+
+git clone -b feature/plugin-platform-sdk-marketplace \
+  git@github.com:ganeshrn/syntara.git syntara
+git clone -b feature/plugin-platform-sdk-marketplace \
+  git@github.com:syntara-orchestration/syntara-plugin-sdk.git syntara-plugin-sdk
+git clone -b feature/plugin-platform-sdk-marketplace \
+  git@github.com:ganeshrn/syntara-step-types.git syntara-step-types
+
+# macOS only; safe to run when the machine is already running.
+podman machine start
+
+cd syntara/backend
+make install
+make build-images
+make run-all
+```
+
+`make run-all` runs in the foreground. When the services are healthy, use the UI at
+`http://localhost:8080` and the API readiness endpoint at `https://localhost:8000/healthz/ready`.
+
+The [Plugin SDK](https://github.com/syntara-orchestration/syntara-plugin-sdk/tree/feature/plugin-platform-sdk-marketplace)
+provides the `syntara-plugin` authoring CLI. The
+[reference plugin repository](https://github.com/ganeshrn/syntara-step-types/tree/feature/plugin-platform-sdk-marketplace)
+contains the Local Echo and GitHub examples. Plugin catalog entries must use the artifact digest produced by publication;
+refresh the catalog index after publishing rather than rebuilding Syntara.
+
 ## Common Commands
 
 | Command | Description |
