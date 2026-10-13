@@ -81,6 +81,22 @@ describe('workflowToGraph', () => {
       expect(tasks[0].id).toBe('aap-1')
     })
 
+    it('extracts installed plugin actions', () => {
+      const activities: Activity[] = [
+        {
+          id: 'github-issue',
+          type: 'external_action',
+          name: 'Create GitHub issue',
+          parameters: {
+            step_revision_id: `syntara.github.create-issue:${'a'.repeat(64)}`,
+            inputs: { owner: 'syntara', repository: 'demo', title: 'Issue title' },
+          },
+        },
+      ]
+
+      expect(extractTaskActivities(activities)).toEqual(activities)
+    })
+
     it('skips unknown activity types', () => {
       const activities = [{ id: 'unknown-1', type: 'unknown_type', name: 'Unknown', parameters: {} }] as Activity[]
       const tasks = extractTaskActivities(activities)

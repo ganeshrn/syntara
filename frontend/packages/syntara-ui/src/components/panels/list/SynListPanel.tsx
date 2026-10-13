@@ -35,10 +35,12 @@ function useSynListPanelTabContext() {
 
 export type SynListPanelProps = {
   children: ReactNode
+  /** Set false for a compact list that shares a page with another full-height panel. */
+  isFullHeight?: boolean
 }
 
 /** Full-height scrollable list panel wrapper. */
-export function SynListPanel({ children }: SynListPanelProps) {
+export function SynListPanel({ children, isFullHeight = true }: SynListPanelProps) {
   const uid = useId()
   const tabContextValue = useMemo<SynListPanelTabContextValue>(
     () => ({ getPanelId: (eventKey: string) => `${uid}-tab-panel-${eventKey}` }),
@@ -46,7 +48,7 @@ export function SynListPanel({ children }: SynListPanelProps) {
   )
   return (
     <SynListPanelTabContext.Provider value={tabContextValue}>
-      <SynPanel isFullHeight>
+      <SynPanel isFullHeight={isFullHeight}>
         <SynPanelContentStack hasGutter>{children}</SynPanelContentStack>
       </SynPanel>
     </SynListPanelTabContext.Provider>

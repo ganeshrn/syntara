@@ -16,6 +16,11 @@ vi.mock('./registry/NodeRegistry', () => ({
   },
 }))
 
+vi.mock('./registry/useInstalledActionNodes', () => ({
+  INSTALLED_ACTION_NODE_PREFIX: 'installed-plugin-action:',
+  useInstalledActionNodes: () => [],
+}))
+
 const mockNodeTypes = [
   {
     id: 'action',

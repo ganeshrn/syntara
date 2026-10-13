@@ -188,6 +188,7 @@ class WorkflowActionBindingError(PluginRegistryError):
         self.node_id = node_id
 
 
+@fastapi_exception(handler="syntara.plugin_platform.error_handlers.plugin_connection_handler")
 class PluginConnectionError(PluginRegistryError):
     """A project plugin-connection identity cannot be safely created or resolved."""
 

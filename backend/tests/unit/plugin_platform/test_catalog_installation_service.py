@@ -16,7 +16,7 @@ from syntara.plugin_platform.services.runner_profile import PlatformRunnerProfil
 
 
 def _version(
-    *, runtime_ownership: Literal["platform-runner", "custom-workload"] = "custom-workload"
+    *, runtime_ownerships: list[Literal["platform-runner", "custom-workload"]] | None = None
 ) -> CatalogPluginVersion:
     return CatalogPluginVersion(
         reconciliation_id=uuid4(),
@@ -26,7 +26,7 @@ def _version(
         artifact_repository="syntara/plugins/github",
         artifact_digest="sha256:" + "a" * 64,
         documentation_digest="sha256:" + "b" * 64,
-        runtime_ownership=runtime_ownership,
+        runtime_ownerships=runtime_ownerships or ["custom-workload"],
         canonical_entry={},
     )
 
@@ -209,29 +209,73 @@ def test_candidate_binds_platform_runner_actions_to_the_server_owned_profile() -
 
     candidate = build_catalog_install_candidate(
         _artifact(descriptor),
-        _version(runtime_ownership="platform-runner"),
+        _version(runtime_ownerships=["platform-runner"]),
         {"signature": "verified"},
         runner_profiles={
             "http.v1": PlatformRunnerProfile(
                 revision_id=uuid4(),
                 driver="http.v1",
-                image_digest="quay.io/syntara/http-runner@sha256:" + "e" * 64,
+                image_digest="localhost:8443/syntara/http-runner@sha256:" + "e" * 64,
             )
         },
     )
 
     action = candidate.actions[0]
     assert action.runtime_kind == "platform-runner"
-    assert action.image_digest == "quay.io/syntara/http-runner@sha256:" + "e" * 64
+    assert action.image_digest == "localhost:8443/syntara/http-runner@sha256:" + "e" * 64
     assert action.canonical_definition["runtime"] == {
         "abi": "syntara.container/v1alpha1",
         "driver": "http.v1",
-        "image": "quay.io/syntara/http-runner@sha256:" + "e" * 64,
+        "image": "localhost:8443/syntara/http-runner@sha256:" + "e" * 64,
         "kind": "platform-runner",
         "operation": _http_operation(),
         "profileRevisionId": str(action.runner_profile_revision_id),
     }
     assert action.runner_profile_revision_id is not None
+
+
+def test_candidate_accepts_mixed_runtime_actions_from_one_plugin() -> None:
+    descriptor = deepcopy(_descriptor())
+    specification = descriptor["spec"]
+    assert isinstance(specification, dict)
+    targets = specification["targets"]
+    assert isinstance(targets, list)
+    targets.append(
+        {
+            "kind": "Action",
+            "identity": "syntara.github.health",
+            "version": "1.0.0",
+            "metadata": {
+                "name": "health",
+                "displayName": "Health",
+                "description": "Checks GitHub service health.",
+            },
+            "sourcePath": "steps/health/manifest.yaml",
+            "runtime": {
+                "kind": "platform-runner",
+                "driver": "http.v1",
+                "operation": _http_operation(),
+            },
+            "input": {"type": "object"},
+            "output": {"type": "object"},
+            "error": {"type": "object"},
+        }
+    )
+
+    candidate = build_catalog_install_candidate(
+        _artifact(descriptor),
+        _version(runtime_ownerships=["custom-workload", "platform-runner"]),
+        {"signature": "verified"},
+        runner_profiles={
+            "http.v1": PlatformRunnerProfile(
+                revision_id=uuid4(),
+                driver="http.v1",
+                image_digest="localhost:8443/syntara/http-runner@sha256:" + "e" * 64,
+            )
+        },
+    )
+
+    assert {action.runtime_kind for action in candidate.actions} == {"custom-workload", "platform-runner"}
 
 
 def test_candidate_rejects_platform_runner_without_an_admitted_profile() -> None:
@@ -251,7 +295,7 @@ def test_candidate_rejects_platform_runner_without_an_admitted_profile() -> None
     with pytest.raises(CatalogSourceConfigurationError, match="platform runner driver"):
         build_catalog_install_candidate(
             _artifact(descriptor),
-            _version(runtime_ownership="platform-runner"),
+            _version(runtime_ownerships=["platform-runner"]),
             {"signature": "verified"},
         )
 
@@ -278,7 +322,7 @@ def test_candidate_rejects_an_http_operation_that_can_select_another_origin(path
     with pytest.raises(CatalogSourceConfigurationError, match=r"http\.v1 operation"):
         build_catalog_install_candidate(
             _artifact(descriptor),
-            _version(runtime_ownership="platform-runner"),
+            _version(runtime_ownerships=["platform-runner"]),
             {"signature": "verified"},
             runner_profiles={
                 "http.v1": PlatformRunnerProfile(
@@ -290,9 +334,9 @@ def test_candidate_rejects_an_http_operation_that_can_select_another_origin(path
         )
 
 
-def test_candidate_rejects_catalog_runtime_ownership_that_disagrees_with_the_artifact() -> None:
+def test_candidate_rejects_catalog_runtime_ownerships_that_disagree_with_the_artifact() -> None:
     version = _version()
-    version.runtime_ownership = "platform-runner"
+    version.runtime_ownerships = ["platform-runner"]
 
     with pytest.raises(CatalogSourceConfigurationError, match="catalog runtime ownership"):
         build_catalog_install_candidate(_artifact(_descriptor()), version, {"signature": "verified"})

@@ -62,7 +62,7 @@ def _catalog_version_payload(**overrides: object) -> dict[str, object]:
         "artifact_repository": "syntara/plugins/github",
         "artifact_digest": _DIGEST_A,
         "documentation_digest": _DIGEST_B,
-        "runtime_ownership": "platform-runner",
+        "runtime_ownerships": ["platform-runner"],
         "canonical_entry": {"name": "github"},
     }
     payload.update(overrides)

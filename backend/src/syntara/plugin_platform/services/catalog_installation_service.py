@@ -215,6 +215,7 @@ class CatalogPluginInstallationService:
             repository=version.artifact_repository,
             credential_ref=source.credential_ref,
             custom_ca_ref=source.custom_ca_ref,
+            source_mode=source.source_mode,
         )
         authorization = await self._authorization_resolver.resolve_authorization(access_request)
         tls_context = await self._tls_context_resolver.resolve_tls_context(access_request)
@@ -492,24 +493,24 @@ def _validate_runtime_ownership(
     action_bindings: list[_ActionBinding],
     workloads: Mapping[str, Any],
 ) -> None:
-    """Enforce the catalog's one runtime ownership model for the action set."""
+    """Require the catalog capability set to exactly match the action runtimes."""
     runtime_kinds = {binding.action.runtime_kind for binding in action_bindings}
-    if version.runtime_ownership == "custom-workload":
-        if runtime_kinds != {"custom-workload"}:
-            _unsupported_descriptor("catalog runtime ownership")
-        workload_ids = {binding.workload_id for binding in action_bindings}
+    if runtime_kinds != set(version.runtime_ownerships):
+        _unsupported_descriptor("catalog runtime ownerships")
+    if "custom-workload" in runtime_kinds:
+        workload_ids = {
+            binding.workload_id for binding in action_bindings if binding.action.runtime_kind == "custom-workload"
+        }
         if len(workload_ids) != 1 or None in workload_ids:
             _unsupported_descriptor("multiple custom workloads")
         if set(workloads) != workload_ids:
             _unsupported_descriptor("additional workload or provider binding")
         return
-    if version.runtime_ownership == "platform-runner":
-        if runtime_kinds != {"platform-runner"}:
-            _unsupported_descriptor("catalog runtime ownership")
-        if workloads:
-            _unsupported_descriptor("platform runner workload binding")
+    if workloads:
+        _unsupported_descriptor("platform runner workload binding")
+    if runtime_kinds == {"platform-runner"}:
         return
-    _unsupported_descriptor("catalog runtime ownership")
+    _unsupported_descriptor("catalog runtime ownerships")
 
 
 @dataclass(frozen=True)

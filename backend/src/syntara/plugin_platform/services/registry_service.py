@@ -46,7 +46,11 @@ _JSON_FIELD_MAX_BYTES = 1_048_576
 _IDENTIFIER_PATTERN = r"^[a-z][a-z0-9-]{0,62}$"
 _SEMVER_PATTERN = r"^(?:0|[1-9][0-9]*)\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
 _SHA256_PATTERN = r"^sha256:[a-f0-9]{64}$"
-_IMAGE_DIGEST_PATTERN = r"^[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$"
+# A runner or publisher image may live in an on-premises registry with a
+# non-default port (for example ``localhost:8443/...``). These references are
+# admitted and pinned server-side; workflow or plugin author input cannot set
+# them.
+_IMAGE_DIGEST_PATTERN = r"^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$"
 _REPOSITORY_PATTERN = r"^[a-z0-9][a-z0-9._/-]{0,254}$"
 _QUALIFIED_IDENTIFIER_PATTERN = r"^[a-z][a-z0-9-]{0,62}(?:\.[a-z][a-z0-9-]{0,62})+$"
 _FIELD_IDENTIFIER_PATTERN = r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"

@@ -9,6 +9,7 @@ import pytest
 from syntara.plugin_platform.exceptions import CatalogSourceConfigurationError
 from syntara.plugin_platform.services.runner_profile import (
     PlatformRunnerProfile,
+    RunnerProfileRevisionCandidate,
     StaticPlatformRunnerProfileResolver,
 )
 
@@ -31,3 +32,12 @@ async def test_static_resolver_rejects_an_unconfigured_driver() -> None:
 
     with pytest.raises(CatalogSourceConfigurationError, match="No approved platform runner profile"):
         await resolver.resolve_platform_runner("http.v1")
+
+
+def test_runner_profile_candidate_accepts_a_digest_from_a_registry_with_a_port() -> None:
+    candidate = RunnerProfileRevisionCandidate(
+        driver="http.v1",
+        image_digest="localhost:8443/syntara-admin/runners/http-v1@sha256:" + "a" * 64,
+    )
+
+    assert candidate.image_digest.startswith("localhost:8443/")

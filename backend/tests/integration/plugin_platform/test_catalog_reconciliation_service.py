@@ -58,7 +58,7 @@ def _artifact(*, artifact_repository: str = "syntara/plugins/github") -> Verifie
                         "artifactRepository": artifact_repository,
                         "artifactDigest": _digest("a"),
                         "documentationDigest": _digest("b"),
-                        "runtimeOwnership": "platform-runner",
+                        "runtimeOwnerships": ["platform-runner"],
                     }
                 ]
             },

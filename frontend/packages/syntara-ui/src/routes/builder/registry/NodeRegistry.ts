@@ -65,6 +65,9 @@ export type NodeTypeDefinition<TFormData = unknown> = {
   /** Form component to render when selected */
   formComponent: ComponentType<BaseNodeFormProps<TFormData> & Record<string, unknown>>
 
+  /** Immutable, server-read form context for this node type. */
+  formProps?: Record<string, unknown>
+
   /** Optional subtype options */
   subtypes?: NodeSubtypeDefinition<TFormData>[]
 

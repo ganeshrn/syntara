@@ -102,7 +102,7 @@ async def test_local_poc_plugin_artifact_trust_is_documentation_only_and_profile
 
     assert decision.summary == {
         "profile": "local-poc",
-        "operation": "documentation-hydration",
+        "operation": "catalog-metadata",
         "registryTransport": "loopback-http",
         "signatureVerification": "skipped",
         "unsafeDevelopmentMode": True,

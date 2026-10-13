@@ -21,9 +21,48 @@ import {
   createWaitActivity,
   createWebhookTrigger,
   createEdaTrigger,
+  createExternalActionActivity,
 } from './workflowFactories'
 
 describe('workflowFactories', () => {
+  describe('createExternalActionActivity', () => {
+    it('stores only the installed action revision and structured inputs', () => {
+      const activity = createExternalActionActivity({
+        id: 'plugin-1',
+        name: 'Create GitHub issue',
+        stepRevisionId: `syntara.github.create-issue:${'a'.repeat(64)}`,
+        inputs: { owner: 'syntara', repository: 'demo', title: 'Issue title' },
+      })
+
+      expect(activity).toEqual({
+        id: 'plugin-1',
+        type: 'external_action',
+        name: 'Create GitHub issue',
+        parameters: {
+          step_revision_id: `syntara.github.create-issue:${'a'.repeat(64)}`,
+          inputs: { owner: 'syntara', repository: 'demo', title: 'Issue title' },
+        },
+      })
+      expect(activity.parameters).not.toHaveProperty('image')
+      expect(activity.parameters).not.toHaveProperty('credential_id')
+    })
+
+    it('stores an optional project integration identity without exposing its credential', () => {
+      const activity = createExternalActionActivity({
+        id: 'plugin-connection-1',
+        name: 'Create GitHub issue',
+        stepRevisionId: `syntara.github.create-issue:${'a'.repeat(64)}`,
+        pluginIntegrationId: '00000000-0000-4000-8000-000000000001',
+      })
+
+      expect(activity.parameters).toMatchObject({
+        plugin_connection_id: '00000000-0000-4000-8000-000000000001',
+      })
+      expect(activity.parameters).not.toHaveProperty('token')
+      expect(activity.parameters).not.toHaveProperty('credential')
+    })
+  })
+
   describe('Trigger Factories', () => {
     describe('createManualTrigger', () => {
       it('creates a manual trigger without approval', () => {

@@ -111,6 +111,38 @@ export function createApiActivity(options: CreateApiActivityOptions): Activity {
   }
 }
 
+export type CreateExternalActionActivityOptions = {
+  id: string
+  name: string
+  stepRevisionId: string
+  inputs?: Record<string, unknown>
+  pluginIntegrationId?: string
+  settings?: NodeSettings
+}
+
+/**
+ * Create a workflow step backed by an administrator-installed plugin action.
+ *
+ * Deliberately store only the immutable action revision, user inputs, and an
+ * optional project integration identity. The backend resolves every runnable
+ * detail from trusted installed state during publication; browser code never
+ * carries an image, command, or credential.
+ */
+export function createExternalActionActivity(options: CreateExternalActionActivityOptions): Activity {
+  const { id, name, stepRevisionId, inputs = {}, pluginIntegrationId, settings } = options
+  return {
+    id,
+    type: ActivityTypeEnum.EXTERNAL_ACTION,
+    name,
+    parameters: {
+      step_revision_id: stepRevisionId,
+      inputs,
+      ...(pluginIntegrationId ? { plugin_connection_id: pluginIntegrationId } : {}),
+    },
+    ...(settings && { settings }),
+  }
+}
+
 export type CreateAgenticActivityOptions = {
   id: string
   name: string

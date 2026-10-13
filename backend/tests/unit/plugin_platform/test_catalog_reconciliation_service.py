@@ -45,7 +45,7 @@ def _entry(**overrides: object) -> dict[str, object]:
         "artifactRepository": "syntara/plugins/github",
         "artifactDigest": _digest("a"),
         "documentationDigest": _digest("b"),
-        "runtimeOwnership": "platform-runner",
+        "runtimeOwnerships": ["platform-runner"],
     }
     value.update(overrides)
     return value

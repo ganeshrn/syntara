@@ -104,6 +104,7 @@ export const executorMetadata: Record<string, ExecutorDisplayMetadata> = {
   script: { icon: RhUiCodeIcon, label: 'Script' },
   agentic: { icon: RhUiRobotIcon, label: 'Task Agent' },
   http_request: { icon: RhUiPlugFillIcon, label: 'REST API' },
+  external_action: { icon: RhUiPlugFillIcon, label: 'Installed plugin action' },
   aap_job_template: aapJobExecutorDisplay,
   aap_workflow_job_template: aapWorkflowExecutorDisplay,
   /** Internal key from detectTaskNodeType (agentic + ansible connector prompt), not an API executor string */

@@ -419,7 +419,6 @@ class CatalogPluginVersion(BaseResource, table=True):
         "namespace",
         "name",
         "version",
-        "runtime_ownership",
         "deprecated",
         "withdrawn",
     ]
@@ -428,7 +427,6 @@ class CatalogPluginVersion(BaseResource, table=True):
         "namespace",
         "name",
         "version",
-        "runtime_ownership",
         "deprecated",
         "withdrawn",
     ]
@@ -442,8 +440,12 @@ class CatalogPluginVersion(BaseResource, table=True):
         ),
         Index("ix_catalog_plugin_versions_identity", "namespace", "name", "version"),
         CheckConstraint(
-            "runtime_ownership IN ('platform-runner', 'custom-workload')",
-            name="ck_catalog_plugin_versions_runtime_ownership",
+            "runtime_ownerships IN ("
+            "'[\"platform-runner\"]'::jsonb, "
+            "'[\"custom-workload\"]'::jsonb, "
+            '\'["custom-workload", "platform-runner"]\'::jsonb'
+            ")",
+            name="ck_catalog_plugin_versions_runtime_ownerships",
         ),
     )
 
@@ -485,8 +487,10 @@ class CatalogPluginVersion(BaseResource, table=True):
         max_length=71,
         sa_type=String(71),  # type: ignore[call-overload]
     )
-    runtime_ownership: Literal["platform-runner", "custom-workload"] = Field(
-        sa_type=String(32),  # type: ignore[call-overload]
+    runtime_ownerships: list[Literal["platform-runner", "custom-workload"]] = Field(
+        min_length=1,
+        max_length=2,
+        sa_type=JSONB,
     )
     deprecated: bool = Field(
         default=False,
@@ -509,6 +513,17 @@ class CatalogPluginVersion(BaseResource, table=True):
             msg = "Plugin artifact repository must be a normalized OCI repository path"
             raise ValueError(msg)
         return value
+
+    @field_validator("runtime_ownerships")
+    @classmethod
+    def _validate_runtime_ownerships(
+        cls, values: list[Literal["platform-runner", "custom-workload"]]
+    ) -> list[Literal["platform-runner", "custom-workload"]]:
+        """Store a canonical nonempty runtime capability set for each plugin version."""
+        if len(values) != len(set(values)):
+            msg = "Catalog plugin runtime ownerships must be unique"
+            raise ValueError(msg)
+        return sorted(values)
 
     @field_validator("namespace", "name")
     @classmethod

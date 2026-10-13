@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -10,10 +11,14 @@ import pytest_asyncio
 from pydantic import ValidationError
 from sqlmodel import select
 
+from syntara.core.models.secret import EncryptedSecret, Secret
+from syntara.core.services.secret_service import create_secret_service
 from syntara.plugin_platform.exceptions import PluginConnectionError
-from syntara.plugin_platform.models.registry import PluginRegistryState
+from syntara.plugin_platform.models.plugin_connection import PluginConnection
+from syntara.plugin_platform.models.registry import InstalledPluginCredentialType, PluginRegistryState
 from syntara.plugin_platform.services.plugin_connection_service import (
     PluginConnectionCreate,
+    PluginConnectionProvision,
     PluginConnectionService,
 )
 from syntara.plugin_platform.services.registry_service import (
@@ -71,7 +76,18 @@ def _candidate() -> VerifiedPluginCandidate:
                 revision_digest=_digest("d"),
                 endpoint_kinds=("github-cloud", "github-enterprise"),
                 credential_type_ids=("syntara.github.service-token",),
-                configuration_schema={"type": "object"},
+                configuration_schema={
+                    "type": "object",
+                    "required": ["endpointKind"],
+                    "properties": {
+                        "endpointKind": {
+                            "type": "string",
+                            "enum": ["github-cloud", "github-enterprise"],
+                        },
+                        "endpointOrigin": {"type": "string"},
+                    },
+                    "additionalProperties": False,
+                },
                 canonical_definition={"kind": "IntegrationType", "id": "syntara.github.connection"},
             ),
         ),
@@ -82,7 +98,12 @@ def _candidate() -> VerifiedPluginCandidate:
                 display_name="GitHub service token",
                 description="A static bearer token.",
                 revision_digest=_digest("e"),
-                credential_schema={"type": "object", "required": ["token"]},
+                credential_schema={
+                    "type": "object",
+                    "required": ["token"],
+                    "properties": {"token": {"type": "string", "minLength": 1}},
+                    "additionalProperties": False,
+                },
                 secret_field_names=("token",),
                 issuance={"kind": "static-bearer.v1"},
                 canonical_definition={"kind": "CredentialRecipe", "id": "syntara.github.service-token"},
@@ -219,3 +240,161 @@ def test_connection_create_rejects_configuration_or_credential_input() -> None:
                 "credential_id": "00000000-0000-4000-8000-000000000002",
             }
         )
+
+
+@pytest.mark.asyncio
+async def test_connection_provision_validates_contract_and_encrypts_credential(
+    test_db_session: AsyncSession,
+    test_project_id: UUID,
+    test_user: User,
+) -> None:
+    """Complete setup persists validated metadata but never the credential value."""
+    integration_type_revision_id = await _installed_type_revision(test_db_session, test_user)
+    result = await test_db_session.exec(
+        select(InstalledPluginCredentialType).where(
+            InstalledPluginCredentialType.integration_type_revision_id == integration_type_revision_id
+        )
+    )
+    credential_type = result.one()
+    secret = Secret()
+    test_db_session.add(secret)
+    await test_db_session.flush()
+    secret_service = AsyncMock()
+    secret_service.create_secret.return_value = secret.id
+    service = PluginConnectionService(test_db_session, secret_service)
+
+    connection = await service.provision(
+        PluginConnectionProvision(
+            name="GitHub Cloud",
+            project_id=test_project_id,
+            integration_type_revision_id=integration_type_revision_id,
+            credential_type_revision_id=credential_type.id,
+            endpoint_kind="github-cloud",
+            configuration={"endpointKind": "github-cloud"},
+            credential_inputs={"token": "not-a-real-token"},
+        ),
+        actor_id=test_user.id,
+    )
+
+    secret_service.create_secret.assert_awaited_once_with({"token": "not-a-real-token"})
+    assert connection.configuration == {"endpointKind": "github-cloud"}
+    assert connection.credential_type_revision_id == credential_type.id
+    assert connection.secret_id == secret_service.create_secret.return_value
+
+
+@pytest.mark.asyncio
+async def test_connection_provision_rejects_invalid_configuration_before_secret_storage(
+    test_db_session: AsyncSession,
+    test_project_id: UUID,
+    test_user: User,
+) -> None:
+    """Bad non-secret configuration cannot result in a persisted secret."""
+    integration_type_revision_id = await _installed_type_revision(test_db_session, test_user)
+    result = await test_db_session.exec(
+        select(InstalledPluginCredentialType).where(
+            InstalledPluginCredentialType.integration_type_revision_id == integration_type_revision_id
+        )
+    )
+    credential_type = result.one()
+    secret_service = AsyncMock()
+    service = PluginConnectionService(test_db_session, secret_service)
+
+    with pytest.raises(PluginConnectionError) as raised:
+        await service.provision(
+            PluginConnectionProvision(
+                name="Invalid GitHub Cloud",
+                project_id=test_project_id,
+                integration_type_revision_id=integration_type_revision_id,
+                credential_type_revision_id=credential_type.id,
+                endpoint_kind="github-cloud",
+                configuration={"endpointKind": "github-enterprise"},
+                credential_inputs={"token": "not-a-real-token"},
+            ),
+            actor_id=test_user.id,
+        )
+
+    assert raised.value.code == "connection-configuration-invalid"
+    secret_service.create_secret.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_connection_provision_stores_only_an_opaque_secret_reference(
+    test_db_session: AsyncSession,
+    test_project_id: UUID,
+    test_user: User,
+) -> None:
+    """A valid provision writes ciphertext outside the connection record."""
+    integration_type_revision_id = await _installed_type_revision(test_db_session, test_user)
+    result = await test_db_session.exec(
+        select(InstalledPluginCredentialType).where(
+            InstalledPluginCredentialType.integration_type_revision_id == integration_type_revision_id
+        )
+    )
+    credential_type = result.one()
+    plaintext = "local-test-token-must-not-appear-in-connection"
+    service = PluginConnectionService(test_db_session, create_secret_service(test_db_session))
+
+    connection = await service.provision(
+        PluginConnectionProvision(
+            name="Encrypted GitHub Cloud",
+            project_id=test_project_id,
+            integration_type_revision_id=integration_type_revision_id,
+            credential_type_revision_id=credential_type.id,
+            endpoint_kind="github-cloud",
+            configuration={"endpointKind": "github-cloud"},
+            credential_inputs={"token": plaintext},
+        ),
+        actor_id=test_user.id,
+    )
+
+    assert connection.secret_id is not None
+    assert plaintext not in str(connection.model_dump())
+    encrypted = await test_db_session.exec(
+        select(EncryptedSecret).where(EncryptedSecret.secret_id == connection.secret_id)
+    )
+    encrypted_record = encrypted.one()
+    assert plaintext not in str(encrypted_record.encrypted_data)
+    assert await create_secret_service(test_db_session).retrieve_secret(connection.secret_id) == {"token": plaintext}
+
+
+@pytest.mark.asyncio
+async def test_connection_can_be_disabled_and_deleted_with_its_secret(
+    test_db_session: AsyncSession,
+    test_project_id: UUID,
+    test_user: User,
+) -> None:
+    """Lifecycle controls affect only the connection identity and opaque secret."""
+    integration_type_revision_id = await _installed_type_revision(test_db_session, test_user)
+    result = await test_db_session.exec(
+        select(InstalledPluginCredentialType).where(
+            InstalledPluginCredentialType.integration_type_revision_id == integration_type_revision_id
+        )
+    )
+    credential_type = result.one()
+    secret = Secret()
+    test_db_session.add(secret)
+    await test_db_session.flush()
+    secret_service = AsyncMock()
+    secret_service.create_secret.return_value = secret.id
+    service = PluginConnectionService(test_db_session, secret_service)
+    connection = await service.provision(
+        PluginConnectionProvision(
+            name="Disposable GitHub Cloud",
+            project_id=test_project_id,
+            integration_type_revision_id=integration_type_revision_id,
+            credential_type_revision_id=credential_type.id,
+            endpoint_kind="github-cloud",
+            configuration={"endpointKind": "github-cloud"},
+            credential_inputs={"token": "not-a-real-token"},
+        ),
+        actor_id=test_user.id,
+    )
+
+    disabled = await service.set_enabled(connection.id, enabled=False, actor_id=test_user.id)
+    assert disabled.enabled is False
+    assert disabled.updated_by == test_user.id
+    assert [item.id for item in await service.list_for_project(project_id=test_project_id)] == [connection.id]
+
+    await service.delete(connection.id)
+    secret_service.delete_secret.assert_awaited_once_with(secret_service.create_secret.return_value)
+    assert await test_db_session.get(PluginConnection, connection.id) is None

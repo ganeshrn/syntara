@@ -183,6 +183,12 @@ BUILTIN_POLICIES: list[PolicyInfo] = [
     # installed plugin registry is a non-secret active execution snapshot
     PolicyInfo("plugin_registry", "read", roles=("admin", "auditor", "user")),
     PolicyInfo("plugin_registry", "install", roles=("admin",)),
+    # plugin connections hold typed, project-scoped configuration. Credential
+    # material is encrypted by SecretService and is never returned by this API.
+    PolicyInfo("plugin_connection", "create", roles=("admin",)),
+    PolicyInfo("plugin_connection", "read", roles=("admin", "auditor")),
+    PolicyInfo("plugin_connection", "update", roles=("admin",)),
+    PolicyInfo("plugin_connection", "delete", roles=("admin",)),
     # authz query
     PolicyInfo("authz", "query", roles=("admin",)),
     # admin revocation
@@ -208,6 +214,15 @@ BUILTIN_POLICIES: list[PolicyInfo] = [
     PolicyInfo("credential", "update", scope="own", roles=("project-user",)),
     PolicyInfo("credential", "delete", scope="project", roles=("project-admin",)),
     PolicyInfo("credential", "use", scope="project", roles=("project-admin", "project-user")),
+    PolicyInfo("plugin_connection", "create", scope="project", roles=("project-admin", "project-user")),
+    PolicyInfo(
+        "plugin_connection",
+        "read",
+        scope="project",
+        roles=("project-admin", "project-user", "project-auditor"),
+    ),
+    PolicyInfo("plugin_connection", "update", scope="project", roles=("project-admin", "project-user")),
+    PolicyInfo("plugin_connection", "delete", scope="project", roles=("project-admin", "project-user")),
     PolicyInfo("approval", "read", scope="project", roles=("project-admin", "project-user", "project-auditor")),
     PolicyInfo("approval", "decide", scope="project", roles=("project-admin", "project-user")),
     PolicyInfo("approval", "delete", scope="project", roles=("project-admin",)),

@@ -71,8 +71,9 @@ class PermissionChecker:
         async def create_workflow(...):
             ...
 
-    For project-scoped checks, pass project_param to extract the project name
-    from the path:
+    For project-scoped checks, pass ``project_param`` to extract the project
+    name from the path, or ``query_project_param`` for a project-filtered
+    collection endpoint:
         Depends(PermissionChecker("project", "update", project_param="project_id"))
 
     """
@@ -83,6 +84,7 @@ class PermissionChecker:
         action: str,
         *,
         project_param: str | None = None,
+        query_project_param: str | None = None,
         resource_model: type[SQLModel] | None = None,
         resource_id_param: str | None = None,
         body_project_field: str | None = None,
@@ -97,6 +99,9 @@ class PermissionChecker:
             project_param: Path parameter name for project-scoped checks. When set,
                 the checker looks up the project name from the database using this
                 path parameter's UUID value.
+            query_project_param: Query parameter name for project-scoped checks.
+                Use this for collection endpoints that require a project UUID in
+                the query string, such as a project-filtered connection list.
             resource_model: SQLModel class with a project_id field. When set together
                 with resource_id_param, the checker looks up the resource's project_id
                 to enable project-scoped permission checks on single-resource endpoints.
@@ -116,6 +121,7 @@ class PermissionChecker:
         self.resource_type = resource_type
         self.action = action
         self.project_param = project_param
+        self.query_project_param = query_project_param
         self.resource_model = resource_model
         self.resource_id_param = resource_id_param
         self.body_project_field = body_project_field
@@ -220,10 +226,25 @@ class PermissionChecker:
         return str(owner_id) if owner_id else ""
 
     async def _resolve_project_from_path(self, request: Request, db: AsyncSession) -> str:
-        """Resolve project name from the project_param path parameter."""
+        """Resolve project name from the ``project_param`` path parameter."""
         if not self.project_param:
             return ""
         project_id = request.path_params.get(self.project_param, "")
+        if not project_id:
+            return ""
+        resource_project = await self._resolve_project_name(db, project_id)
+        if not resource_project:
+            from syntara.authz.exceptions import ProjectNotFoundError  # noqa: PLC0415
+
+            msg = f"Project {project_id} not found"
+            raise ProjectNotFoundError(msg)
+        return resource_project
+
+    async def _resolve_project_from_query(self, request: Request, db: AsyncSession) -> str:
+        """Resolve project name from a required project UUID query parameter."""
+        if not self.query_project_param:
+            return ""
+        project_id = request.query_params.get(self.query_project_param, "")
         if not project_id:
             return ""
         resource_project = await self._resolve_project_name(db, project_id)
@@ -259,6 +280,9 @@ class PermissionChecker:
                 # from the path as the resource ID for scope matching.
                 resource_id_from_project_path = request.path_params.get(self.project_param, "")
                 resource_id = resource_id_from_project_path
+
+        if not resource_project and self.query_project_param:
+            resource_project = await self._resolve_project_from_query(request, db)
 
         if not resource_project and self.resource_model and self.resource_id_param and resource_id:
             resource_project = await self._resolve_project_from_resource(db, resource_id)

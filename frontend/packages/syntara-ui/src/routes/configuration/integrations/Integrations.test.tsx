@@ -25,6 +25,15 @@ vi.mock('../../../client', () => ({
   interfaceTagMiddleware: { onRequest: vi.fn() },
 }))
 
+vi.mock('../plugin-integrations/useInstalledPluginIntegrationContracts', () => ({
+  useInstalledPluginIntegrationContracts: () => ({
+    contracts: [],
+    isPending: false,
+    error: undefined,
+    refetch: vi.fn(),
+  }),
+}))
+
 // Mock useFilterState - will be configured per-test
 vi.mock('../../../hooks/useFilterState', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../hooks/useFilterState')>()

@@ -1,10 +1,21 @@
-import { Badge, Button, Switch, Tooltip, Truncate } from '@patternfly/react-core'
+import {
+  Badge,
+  Divider,
+  Dropdown,
+  DropdownItem,
+  DropdownList,
+  MenuToggle,
+  Switch,
+  Tooltip,
+  Truncate,
+} from '@patternfly/react-core'
+import type { MenuToggleElement } from '@patternfly/react-core'
 import { RhUiAddIcon, RhUiCheckCircleIcon, RhUiTrashIcon } from '@patternfly/react-icons'
 import { Tbody, Td, Th, Thead, Tr } from '@patternfly/react-table'
 import type { ThProps } from '@patternfly/react-table'
 import type { IntegrationsAPI } from '@syntara/contracts'
 import { useNavigate } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { useMemo, useState, type Ref } from 'react'
 
 import { AppRoute } from '../../../app/AppRoute'
 import { integrationsClient } from '../../../client'
@@ -27,6 +38,8 @@ import { useCursorPagination, useCursorReset } from '../../../hooks/useCursorPag
 import type { FilterFieldDefinition } from '../../../types/filters'
 import { detachPromise } from '../../../utils/detachPromise'
 import { useDocLink } from '../../../utils/docs/useDocLink'
+import { pluginIntegrationSetupPath } from '../plugin-integrations/pluginIntegrationSetupPath'
+import { useInstalledPluginIntegrationContracts } from '../plugin-integrations/useInstalledPluginIntegrationContracts'
 
 import { IntegrationDialogs } from './IntegrationDialogs'
 import { IntegrationEmptyState } from './IntegrationEmptyState'
@@ -38,11 +51,70 @@ import {
 } from './integrationFilters'
 import { integrationDefaultSort, integrationTableColumns } from './integrationTableColumns'
 import { getBaseUrl, getEnabledResourceCount } from './integrationUtils'
+import { PluginIntegrationsList } from './PluginIntegrationsList'
 import { StatusLabel } from './StatusLabel'
 import { useIntegrationActions } from './useIntegrationActions'
 import { useIntegrationPermissions } from './useIntegrationPermissions'
 
 type IntegrationRead = IntegrationsAPI.components['schemas']['IntegrationRead']
+
+function IntegrationConfigureMenu({
+  canCreate,
+  tooltip,
+  contracts,
+}: Readonly<{
+  canCreate: boolean
+  tooltip: string
+  contracts: ReturnType<typeof useInstalledPluginIntegrationContracts>['contracts']
+}>) {
+  const navigate = useNavigate()
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <DisabledWithTooltip isDisabled={!canCreate} content={tooltip}>
+      <Dropdown
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        toggle={(toggleRef: Ref<MenuToggleElement>) => (
+          <MenuToggle
+            ref={toggleRef}
+            variant="primary"
+            icon={<RhUiAddIcon />}
+            isDisabled={!canCreate}
+            aria-disabled={!canCreate || undefined}
+            isExpanded={isOpen}
+            onClick={() => setIsOpen((current) => !current)}
+          >
+            Configure integration
+          </MenuToggle>
+        )}
+      >
+        <DropdownList>
+          <DropdownItem
+            onClick={() => {
+              setIsOpen(false)
+              detachPromise(navigate({ to: AppRoute.Configuration.Integrations.Configure }))
+            }}
+          >
+            Built-in integration
+          </DropdownItem>
+          {contracts.length > 0 && <Divider />}
+          {contracts.map((contract) => (
+            <DropdownItem
+              key={contract.integrationType.id}
+              onClick={() => {
+                setIsOpen(false)
+                detachPromise(navigate({ to: pluginIntegrationSetupPath(contract.integrationType.id) }))
+              }}
+            >
+              {contract.integrationType.display_name} — Plugin: {contract.sourcePlugin.displayName}
+            </DropdownItem>
+          ))}
+        </DropdownList>
+      </Dropdown>
+    </DisabledWithTooltip>
+  )
+}
 
 function buildRowActions(
   integration: IntegrationRead,
@@ -172,9 +244,9 @@ function IntegrationsTableContent({
 }
 
 export default function Integrations() {
-  const navigate = useNavigate()
   const docLink = useDocLink('integrations')
   const permissions = useIntegrationPermissions()
+  const pluginContracts = useInstalledPluginIntegrationContracts()
 
   const {
     cursor,
@@ -235,28 +307,20 @@ export default function Integrations() {
         title="Integrations"
         docLink={docLink}
         toolbar={
-          !isEmpty || hasActiveFilters ? (
-            <DisabledWithTooltip isDisabled={!permissions.canCreate} content={permissions.tooltips.create}>
-              <Button
-                variant="primary"
-                icon={<RhUiAddIcon />}
-                isAriaDisabled={!permissions.canCreate}
-                onClick={
-                  permissions.canCreate
-                    ? () => {
-                        detachPromise(navigate({ to: AppRoute.Configuration.Integrations.Configure }))
-                      }
-                    : undefined
-                }
-              >
-                Configure integration
-              </Button>
-            </DisabledWithTooltip>
+          !isEmpty || hasActiveFilters || pluginContracts.contracts.length > 0 ? (
+            <IntegrationConfigureMenu
+              canCreate={permissions.canCreate}
+              tooltip={permissions.tooltips.create}
+              contracts={pluginContracts.contracts}
+            />
           ) : undefined
         }
       />
 
       <SynPageBody>
+        {!pluginContracts.isPending && !pluginContracts.error && pluginContracts.contracts.length > 0 && (
+          <PluginIntegrationsList contracts={pluginContracts.contracts} />
+        )}
         <SynListPanel>
           <SynListPanelView
             isPending={query.isPending}

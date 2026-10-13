@@ -308,18 +308,21 @@ class ActivitySyncService(
     )
 
     async def reconcile_stale_executions(self) -> None:
-        """Reconcile executions stuck in RUNNING status after a worker restart.
+        """Reconcile non-terminal executions after a worker restart.
 
-        Queries the database for executions in RUNNING status, checks each
-        one's Temporal workflow status, and updates the DB for any that have
-        already completed in Temporal. Executions still running in Temporal
-        are skipped to avoid duplicate monitoring across workers.
+        A workflow can be accepted by Temporal while no worker is available.
+        In that case the database row remains ``PENDING`` until a worker later
+        starts and consumes the task. Include both ``PENDING`` and ``RUNNING``
+        rows so a workflow that finishes before its monitor is established can
+        still be recovered from Temporal history on worker startup.
         """
         try:
             async with self.session_factory() as session:
                 query = (
                     select(Execution)
-                    .where(Execution.status == ExecutionStatus.RUNNING)
+                    .where(
+                        Execution.status.in_((ExecutionStatus.PENDING, ExecutionStatus.RUNNING))  # type: ignore[attr-defined]
+                    )
                     .options(selectinload(Execution.activities))  # type: ignore[arg-type]
                 )
                 result = await session.exec(query)
@@ -391,7 +394,10 @@ class ActivitySyncService(
             )
             result = await session.exec(query)
             fresh_execution = result.one_or_none()
-            if not fresh_execution or fresh_execution.status != ExecutionStatus.RUNNING:
+            if not fresh_execution or fresh_execution.status not in {
+                ExecutionStatus.PENDING,
+                ExecutionStatus.RUNNING,
+            }:
                 return "skipped"
 
             if completed_at <= fresh_execution.created_at:

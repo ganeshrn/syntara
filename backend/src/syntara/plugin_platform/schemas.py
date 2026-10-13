@@ -1,7 +1,7 @@
 """Administrator API schemas for non-secret catalog-source configuration."""
 
 from datetime import datetime
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 from uuid import UUID
 
 from pydantic import ConfigDict, field_validator
@@ -197,7 +197,10 @@ class CatalogPluginRead(SQLModel):
     artifact_repository: str
     artifact_digest: str
     documentation_digest: str
-    runtime_ownership: Literal["platform-runner", "custom-workload"]
+    runtime_ownerships: list[Literal["platform-runner", "custom-workload"]] = Field(
+        min_length=1,
+        max_length=2,
+    )
     deprecated: bool
     withdrawn: bool
     created_at: datetime
@@ -257,7 +260,6 @@ class CatalogPluginListParams(BaseListParams):
     namespace: str | None = Field(default=None, min_length=1, max_length=63)
     name: str | None = Field(default=None, min_length=1, max_length=63)
     version: str | None = Field(default=None, min_length=5, max_length=128)
-    runtime_ownership: Literal["platform-runner", "custom-workload"] | None = None
     deprecated: bool | None = None
     withdrawn: bool | None = None
 
@@ -288,6 +290,7 @@ class InstalledPluginActionRead(SQLModel):
     runtime_kind: Literal["platform-runner", "custom-workload"]
     runtime_abi: str
     image_digest: str
+    integration_type_revision_id: UUID | None = None
     input_schema: dict[str, object]
     output_schema: dict[str, object]
     error_schema: dict[str, object]
@@ -314,6 +317,84 @@ class InstalledPluginDetailRead(InstalledPluginRead):
 
     registry_generation: int = Field(ge=1)
     actions: list[InstalledPluginActionRead]
+    integration_types: list["InstalledPluginIntegrationTypeRead"] = Field(default_factory=list)
+    credential_types: list["InstalledPluginCredentialTypeRead"] = Field(default_factory=list)
+
+
+class InstalledPluginIntegrationTypeRead(SQLModel):
+    """Safe installed integration contract needed to configure a connection."""
+
+    id: UUID
+    type_id: str
+    display_name: str
+    description: str
+    endpoint_kinds: list[str]
+    credential_type_ids: list[str]
+    configuration_schema: dict[str, object]
+
+
+class InstalledPluginCredentialTypeRead(SQLModel):
+    """Safe installed credential recipe; secret values are never part of this contract."""
+
+    id: UUID
+    integration_type_revision_id: UUID
+    type_id: str
+    display_name: str
+    description: str
+    credential_schema: dict[str, object]
+    secret_field_names: list[str]
+    issuance: dict[str, object]
+
+
+class PluginConnectionCreate(SQLModel):
+    """Create a project-scoped connection using installed immutable type revisions."""
+
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=2_000)
+    project_id: UUID
+    integration_type_revision_id: UUID
+    credential_type_revision_id: UUID
+    endpoint_kind: str = Field(min_length=1, max_length=63)
+    configuration: dict[str, Any] = Field(default_factory=dict)
+    credential_inputs: dict[str, Any] = Field(default_factory=dict, exclude=True)
+
+
+class PluginConnectionUpdate(SQLModel):
+    """Mutable lifecycle state for an existing project connection."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")  # type: ignore[assignment]
+
+    enabled: bool
+
+
+class PluginConnectionRead(SQLModel):
+    """Safe project connection metadata. Credential values and secret IDs are excluded."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(from_attributes=True)  # type: ignore[assignment]
+
+    id: UUID
+    name: str
+    description: str | None
+    project_id: UUID
+    integration_type_revision_id: UUID
+    credential_type_revision_id: UUID | None
+    endpoint_kind: str
+    configuration: dict[str, object]
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PluginConnectionListParams(BaseListParams):
+    """Filters for project-scoped connection listing and workflow selection."""
+
+    project_id: UUID
+    integration_type_revision_id: UUID | None = None
+    enabled: bool | None = None
+
+
+class PluginConnectionListResponse(ResourcesResponse[PluginConnectionRead]):
+    """Non-secret plugin connection list."""
 
 
 class InstalledPluginListParams(BaseListParams):

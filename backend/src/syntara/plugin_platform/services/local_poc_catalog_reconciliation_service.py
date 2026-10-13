@@ -3,9 +3,10 @@
 This module is intentionally separate from the production composition path.
 It is enabled only through ``APP_PLUGIN_PLATFORM_LOCAL_POC_ENABLED=true`` and
 accepts only the exact local Quay profile validated in ``source_profile``.
-It reconciles a catalog index for discovery and may hydrate verified plugin
-documentation. It cannot install plugins, admit workload images, or execute
-workloads.
+It reconciles a catalog index for discovery, may hydrate verified plugin
+documentation, and can install a platform-runner plugin only through an
+already admitted server-owned runner profile. It cannot admit publisher
+workload images or execute workloads.
 """
 
 from __future__ import annotations
@@ -17,6 +18,11 @@ from syntara.plugin_platform.services.catalog_documentation_hydration_service im
     CatalogDocumentationHydrationResult,
     CatalogDocumentationHydrationService,
 )
+from syntara.plugin_platform.services.catalog_installation_service import (
+    CatalogPluginInstallationService,
+    WorkloadImageAdmissionDecision,
+    WorkloadImageAdmissionRequest,
+)
 from syntara.plugin_platform.services.catalog_reconciliation_orchestrator import (
     CatalogIndexTrustDecision,
     CatalogIndexTrustRequest,
@@ -27,6 +33,7 @@ from syntara.plugin_platform.services.plugin_artifact_trust import (
     PluginArtifactTrustDecision,
     PluginArtifactTrustRequest,
 )
+from syntara.plugin_platform.services.runner_profile import DatabasePlatformRunnerProfileResolver
 from syntara.plugin_platform.source_profile import (
     validate_local_poc_catalog_trust,
     validate_local_poc_plugin_artifact_trust,
@@ -84,7 +91,7 @@ class LocalPocCatalogIndexTrustEvaluator:
 
 
 class LocalPocPluginArtifactTrustEvaluator:
-    """Admit a local artifact only for inert documentation hydration.
+    """Admit a local metadata artifact under the bounded local-PoC exception.
 
     This makes the local unsigned exception observable in persisted evidence.
     The generic hydrator still verifies all artifact bytes, identity, and
@@ -105,12 +112,28 @@ class LocalPocPluginArtifactTrustEvaluator:
         return PluginArtifactTrustDecision(
             summary={
                 "profile": "local-poc",
-                "operation": "documentation-hydration",
+                "operation": "catalog-metadata",
                 "registryTransport": "loopback-http",
                 "signatureVerification": "skipped",
                 "unsafeDevelopmentMode": True,
             }
         )
+
+
+class LocalPocWorkloadImageAdmissionEvaluator:
+    """Reject publisher workloads in the local catalog demonstration.
+
+    The local-PoC exception is intentionally limited to unsigned metadata
+    artifacts and the platform-owned runner route.  Publisher workload images
+    require their own image-admission and execution-pool implementation; this
+    adapter prevents a future call site from treating anonymous loopback
+    access as workload admission.
+    """
+
+    async def evaluate_workload_image(self, _request: WorkloadImageAdmissionRequest) -> WorkloadImageAdmissionDecision:
+        """Fail closed because local-PoC does not admit publisher workloads."""
+        msg = "Local-PoC catalog installation does not admit publisher workload images"
+        raise CatalogSourceConfigurationError(msg)
 
 
 class LocalPocCatalogReconciliationService:
@@ -162,3 +185,26 @@ class LocalPocCatalogDocumentationHydrationService:
                 trust_evaluator=LocalPocPluginArtifactTrustEvaluator(),
                 registry_client=client,
             ).hydrate(catalog_plugin_version_id)
+
+
+def build_local_poc_catalog_installation_service(
+    session: AsyncSession,
+    *,
+    registry_client: OciDistributionClient,
+) -> CatalogPluginInstallationService:
+    """Compose the narrow local installer for platform-runner catalog entries.
+
+    The caller owns the OCI client's lifetime.  Installation still reads only
+    the catalog-selected immutable artifact digest, verifies all artifact
+    bytes, and resolves a runner image from the database-backed profile
+    registry.  The plugin artifact, browser, and workflow cannot select an
+    image route.
+    """
+    return CatalogPluginInstallationService(
+        session,
+        authorization_resolver=LocalPocCatalogRegistryAuthorizationResolver(),
+        artifact_trust_evaluator=LocalPocPluginArtifactTrustEvaluator(),
+        workload_image_evaluator=LocalPocWorkloadImageAdmissionEvaluator(),
+        registry_client=registry_client,
+        runner_profile_resolver=DatabasePlatformRunnerProfileResolver(session),
+    )

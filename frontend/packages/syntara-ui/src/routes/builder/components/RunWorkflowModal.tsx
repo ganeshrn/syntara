@@ -5,6 +5,7 @@ import { executionsClient } from '../../../client'
 import { useBlurOnOpen } from '../../../hooks/useBlurOnOpen'
 import { useAlerts } from '../../../providers/alerts'
 import { schemaToTemplateJson } from '../../../utils/jsonSchemaTemplate'
+import { validateJsonSchemaObject } from '../../../utils/jsonSchemaValidation'
 
 import { ExpandableCodeEditor } from './ExpandableCodeEditor'
 import { JsonEditorControls } from './JsonEditorToolbar'
@@ -19,93 +20,6 @@ type RunWorkflowModalProps = Readonly<{
   inputSchema?: Record<string, unknown>
   workflowId?: string | null
 }>
-
-/**
- * Check if a value matches a JSON Schema primitive type.
- * Validates that the value's runtime type corresponds to the expected JSON Schema type.
- *
- * @param value - The value to validate
- * @param expectedType - JSON Schema type string (string, number, integer, boolean, array, object)
- * @returns true if the value matches the expected type, false otherwise
- *
- * @remarks
- * - 'integer' requires `Number.isInteger(value)` — rejects non-integer numbers like 3.5
- * - 'object' excludes arrays and null values
- * - Unknown types default to true (permissive)
- */
-function matchesJsonSchemaType(value: unknown, expectedType: string): boolean {
-  switch (expectedType) {
-    case 'string':
-      return typeof value === 'string'
-    case 'number':
-      return typeof value === 'number'
-    case 'integer':
-      return typeof value === 'number' && Number.isInteger(value)
-    case 'boolean':
-      return typeof value === 'boolean'
-    case 'array':
-      return Array.isArray(value)
-    case 'object':
-      return typeof value === 'object' && value !== null && !Array.isArray(value)
-    case undefined:
-    default:
-      return true
-  }
-}
-
-/**
- * Validate data against a JSON Schema definition.
- * Performs basic validation for required fields and type checking.
- *
- * @param data - The data object to validate
- * @param schema - JSON Schema object defining validation rules
- * @returns Array of error messages (empty if validation passes)
- *
- * @remarks
- * This is a simplified JSON Schema validator that checks:
- * - Required fields (must be present and non-null)
- * - Type matching for defined properties
- *
- * Limitations (intentionally lightweight to avoid a heavy schema-validation bundle):
- * - Does not validate nested objects or arrays recursively
- * - Does not enforce constraints: `minimum`, `maximum`, `pattern`, `enum`, `minItems`,
- *   `additionalProperties`, or `$ref` — these are silently accepted
- * - Does not resolve `$ref` references
- *
- * @example
- * ```typescript
- * const schema = {
- *   type: 'object',
- *   properties: { name: { type: 'string' } },
- *   required: ['name']
- * }
- * validateAgainstSchema({}, schema)
- * // Returns: ['Missing required field: "name"']
- * ```
- */
-function validateAgainstSchema(data: Record<string, unknown>, schema: Record<string, unknown>): string[] {
-  const errors: string[] = []
-  if (schema.type !== 'object') return errors
-
-  const required = (schema.required as string[] | undefined) ?? []
-  for (const field of required) {
-    if (!(field in data) || data[field] === undefined || data[field] === null) {
-      errors.push(`Missing required field: "${field}"`)
-    }
-  }
-
-  const properties = schema.properties as Record<string, { type?: string }> | undefined
-  if (properties) {
-    for (const [key, prop] of Object.entries(properties)) {
-      if (!(key in data) || data[key] === null || data[key] === undefined) continue
-      if (prop.type && !matchesJsonSchemaType(data[key], prop.type)) {
-        errors.push(`Field "${key}" should be ${prop.type}, got ${typeof data[key]}`)
-      }
-    }
-  }
-
-  return errors
-}
 
 export function RunWorkflowModal({
   isOpen,
@@ -200,7 +114,7 @@ export function RunWorkflowModal({
     }
 
     if (inputSchema) {
-      const errors = validateAgainstSchema(parsed, inputSchema)
+      const errors = validateJsonSchemaObject(parsed, inputSchema)
       if (errors.length > 0) {
         showError({
           title: 'Validation failed',

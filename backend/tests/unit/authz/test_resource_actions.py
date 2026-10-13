@@ -279,6 +279,22 @@ class TestBuildResourceActions:
         assert "scoped-res" in result
         assert "list" in result["scoped-res"]
 
+    def test_query_project_parameter_marks_resource_as_project_eligible(self) -> None:
+        from fastapi import FastAPI
+
+        from syntara.authz.dependencies import PermissionChecker
+        from syntara.authz.resource_actions import get_project_eligible_resource_types
+
+        app = FastAPI()
+        checker = PermissionChecker("query-scoped", "read", query_project_param="project_id")
+
+        @app.get("/test", dependencies=[Depends(checker)])
+        async def _test_endpoint() -> dict[str, str]:
+            return {}
+
+        build_resource_actions(app)
+        assert "query-scoped" in get_project_eligible_resource_types()
+
     def test_includes_builtin_policies(self) -> None:
         from fastapi import FastAPI
 

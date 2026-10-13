@@ -236,6 +236,7 @@ def build_resource_actions(app: FastAPI) -> dict[str, list[str]]:
                 pairs.add((inner.resource_type, inner.action))
             if isinstance(inner, PermissionChecker) and (
                 inner.project_param
+                or inner.query_project_param
                 or inner.body_project_field
                 or (inner.resource_model and hasattr(inner.resource_model, "project_id"))
             ):

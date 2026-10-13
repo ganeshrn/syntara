@@ -721,6 +721,7 @@ components:
         - http_request
         - internal_activity
         - script
+        - external_action
 
     CurrentActivity:
       type: object
@@ -1176,6 +1177,7 @@ components:
               - $ref: '#/components/schemas/AAPJobTemplateNode'
               - $ref: '#/components/schemas/AAPWorkflowJobTemplateNode'
               - $ref: '#/components/schemas/HTTPRequestNode'
+              - $ref: '#/components/schemas/ExternalActionNode'
               - $ref: '#/components/schemas/AgenticNode'
               - $ref: '#/components/schemas/ScriptNode'
               - $ref: '#/components/schemas/ApprovalNode'
@@ -1194,6 +1196,7 @@ components:
                 condition: '#/components/schemas/ConditionNode'
                 converge: '#/components/schemas/ConvergeNode'
                 http_request: '#/components/schemas/HTTPRequestNode'
+                external_action: '#/components/schemas/ExternalActionNode'
                 loop: '#/components/schemas/LoopNode'
                 script: '#/components/schemas/ScriptNode'
                 switch: '#/components/schemas/SwitchNode'
@@ -1376,6 +1379,58 @@ components:
         - parameters
       title: HTTPRequestNode
       description: HTTP request executor node.
+    ExternalActionNode:
+      properties:
+        id:
+          type: string
+          pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
+          title: Id
+          description: Unique identifier for the node within the workflow
+        name:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: 'null'
+          title: Name
+          description: Human-readable name for the node
+        description:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: 'null'
+          title: Description
+          description: Human-readable description of the node purpose
+        outputs:
+          anyOf:
+            - additionalProperties:
+                type: string
+              type: object
+            - type: 'null'
+          title: Outputs
+          description: Output extraction mapping
+        position:
+          anyOf:
+            - $ref: '#/components/schemas/NodePosition'
+            - type: 'null'
+          description: Optional UI position hint
+        type:
+          type: string
+          const: external_action
+          title: Type
+        parameters:
+          $ref: '#/components/schemas/ExternalActionParameters'
+        settings:
+          anyOf:
+            - $ref: '#/components/schemas/NodeSettingsFull'
+            - type: 'null'
+      additionalProperties: true
+      type: object
+      required:
+        - id
+        - type
+        - parameters
+      title: ExternalActionNode
+      description: One installed plugin action, pinned when its workflow revision publishes.
     AgenticNode:
       properties:
         id:
@@ -2081,6 +2136,39 @@ components:
         - method
       title: APIExecutorParameters
       description: Parameters for API executor (http_request activity).
+    ExternalActionParameters:
+      additionalProperties: false
+      type: object
+      title: ExternalActionParameters
+      description: |-
+        A generic installed plugin action selected by immutable revision.
+
+        The workflow stores only the installed action revision, an optional project
+        connection identity, and structured inputs. Publication resolves and pins
+        the image and runtime route in a separate durable binding; workflow authors
+        cannot provide an image, command, policy, grant, or credential here.
+      required:
+        - step_revision_id
+      properties:
+        step_revision_id:
+          type: string
+          minLength: 69
+          maxLength: 256
+          pattern: ^[a-z0-9][a-z0-9.-]{2,190}:[a-f0-9]{64}$
+          title: Step Revision Id
+          description: Installed plugin action revision selected for this workflow step.
+        plugin_connection_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+          title: Plugin Connection Id
+          description: Optional project-scoped plugin connection identity.
+        inputs:
+          type: object
+          additionalProperties: true
+          title: Inputs
+          description: Structured action inputs.
     AgenticExecutorParameters:
       properties:
         prompt:

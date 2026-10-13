@@ -1031,6 +1031,8 @@ components:
       $ref: ./shared-schemas.yaml#/components/schemas/AAPWorkflowJobTemplateNode
     HTTPRequestNode:
       $ref: ./shared-schemas.yaml#/components/schemas/HTTPRequestNode
+    ExternalActionNode:
+      $ref: ./shared-schemas.yaml#/components/schemas/ExternalActionNode
     AgenticNode:
       $ref: ./shared-schemas.yaml#/components/schemas/AgenticNode
     ScriptNode:
@@ -1054,6 +1056,8 @@ components:
       $ref: ./shared-schemas.yaml#/components/schemas/AAPWorkflowJobTemplateExecutorParameters
     APIExecutorParameters:
       $ref: ./shared-schemas.yaml#/components/schemas/APIExecutorParameters
+    ExternalActionParameters:
+      $ref: ./shared-schemas.yaml#/components/schemas/ExternalActionParameters
     AgenticExecutorParameters:
       $ref: ./shared-schemas.yaml#/components/schemas/AgenticExecutorParameters
     IntegrationConnectionConfig:

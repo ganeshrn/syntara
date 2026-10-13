@@ -26,6 +26,7 @@ export const ActivityTypeEnum = {
   AGENTIC: 'agentic',
   AAP_JOB_TEMPLATE: 'aap_job_template',
   AAP_WORKFLOW_JOB_TEMPLATE: 'aap_workflow_job_template',
+  EXTERNAL_ACTION: 'external_action',
   APPROVAL: 'approval',
   CONDITION: 'condition',
   LOOP: 'loop',
@@ -91,6 +92,7 @@ export const ExecutorTypeEnum = {
   AGENTIC: 'agentic',
   AAP_JOB_TEMPLATE: 'aap_job_template',
   AAP_WORKFLOW_JOB_TEMPLATE: 'aap_workflow_job_template',
+  EXTERNAL_ACTION: 'external_action',
   APPROVAL: 'approval',
 } as const
 
@@ -298,6 +300,17 @@ export interface AAPWorkflowJobTemplateActivity extends ActivityBase {
   parameters: AAPWorkflowJobTemplateConfig & { [key: string]: unknown }
 }
 
+/** An administrator-installed plugin action selected by immutable revision. */
+export interface ExternalActionActivity extends ActivityBase {
+  type: 'external_action'
+  parameters: {
+    step_revision_id: string
+    plugin_connection_id?: string
+    inputs: Record<string, unknown>
+    [key: string]: unknown
+  }
+}
+
 /** Approval gate node */
 export interface ApprovalActivity extends ActivityBase {
   type: 'approval'
@@ -408,3 +421,4 @@ export type TaskActivity =
   | AgenticActivity
   | AAPJobTemplateActivity
   | AAPWorkflowJobTemplateActivity
+  | ExternalActionActivity

@@ -8,6 +8,7 @@ import type {
   FilesAPI,
   IdentityProvidersAPI,
   IntegrationsAPI,
+  PluginPlatformAPI,
   SettingsAPI,
   ToolManagerAPI,
   UsersAPI,
@@ -142,6 +143,11 @@ export const integrationsFetchClient = createFetchClient<IntegrationsAPI.paths>(
 integrationsFetchClient.use(interfaceTagMiddleware)
 integrationsFetchClient.use(authMiddleware)
 export const integrationsClient = createClient(integrationsFetchClient)
+
+export const pluginPlatformFetchClient = createFetchClient<PluginPlatformAPI.paths>({ baseUrl: '/api/v1/' })
+pluginPlatformFetchClient.use(interfaceTagMiddleware)
+pluginPlatformFetchClient.use(authMiddleware)
+export const pluginPlatformClient = createClient(pluginPlatformFetchClient)
 
 const identityProvidersFetchClient = createFetchClient<IdentityProvidersAPI.paths>({
   baseUrl: '/api/v1',

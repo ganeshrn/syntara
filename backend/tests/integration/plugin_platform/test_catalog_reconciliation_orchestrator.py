@@ -85,7 +85,7 @@ def _artifact_wire() -> _CatalogArtifactWire:
                     "artifactRepository": "syntara/plugins/github",
                     "artifactDigest": "sha256:" + "a" * 64,
                     "documentationDigest": "sha256:" + "b" * 64,
-                    "runtimeOwnership": "platform-runner",
+                    "runtimeOwnerships": ["platform-runner"],
                 }
             ],
         },

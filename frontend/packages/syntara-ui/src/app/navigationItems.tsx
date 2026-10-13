@@ -104,6 +104,12 @@ export const NAV_ITEMS: TNavigationItem[] = [
         path: AppRoute.Configuration.Credentials.Root,
         icon: <RhUiKeyIcon />,
       },
+      {
+        label: 'Plugins',
+        path: AppRoute.Configuration.Plugins.Root,
+        icon: <RhUiListIcon />,
+        requiredPermissions: [{ action: 'read', resourceType: 'plugin_catalog' }],
+      },
     ],
   },
   {

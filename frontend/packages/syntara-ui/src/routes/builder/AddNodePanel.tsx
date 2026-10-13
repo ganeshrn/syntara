@@ -6,6 +6,7 @@ import { SynPanel } from '../../components/layout/SynPanel'
 
 import { NodeTypeOptionsList } from './NodeTypeOptionsList'
 import { NodeRegistry } from './registry/NodeRegistry'
+import { INSTALLED_ACTION_NODE_PREFIX, useInstalledActionNodes } from './registry/useInstalledActionNodes'
 
 type AddNodePanelHeaderProps = {
   panelTitle: string
@@ -82,12 +83,16 @@ type AddNodePanelProps = {
 
 export function AddNodePanel(props: AddNodePanelProps) {
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null)
+  const installedActionNodes = useInstalledActionNodes()
 
   // Registered step types from NodeRegistry
   // Omit triggers when adding from an edge (sourceNodeId) or replacing a generic step (replacementNodeId)
   // because triggers cannot be connection targets
   const nodeTypes = useMemo(() => {
-    const allNodes = NodeRegistry.getAll()
+    const allNodes = [
+      ...NodeRegistry.getAll().filter((node) => !node.id.startsWith(INSTALLED_ACTION_NODE_PREFIX)),
+      ...installedActionNodes,
+    ]
     if (props.hasNoWorkflowNodes) {
       return allNodes.filter((node) => node.category === 'trigger')
     }
@@ -95,7 +100,7 @@ export function AddNodePanel(props: AddNodePanelProps) {
       return allNodes.filter((node) => node.category !== 'trigger')
     }
     return allNodes
-  }, [props.replacementNodeId, props.hasNoWorkflowNodes, props.sourceNodeId])
+  }, [installedActionNodes, props.replacementNodeId, props.hasNoWorkflowNodes, props.sourceNodeId])
 
   const handleNodeClick = (nodeId: string) => {
     const nodeDef = NodeRegistry.get(nodeId)

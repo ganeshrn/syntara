@@ -511,4 +511,26 @@ E2E_COVERAGE_EXEMPT: set[str] = {
     "service_account:rotate_secret:project",
     "service_account:disable:project",
     "service_account:enable:project",
+    # Plugin connections use the same project-scoped PermissionChecker path as
+    # credentials. Their contract-specific behavior is covered by plugin
+    # platform unit and integration tests.
+    "plugin_connection:create:any",
+    "plugin_connection:read:any",
+    "plugin_connection:create:project",
+    "plugin_connection:read:project",
+    # Plugin source, catalog, and registry administration are covered in the
+    # plugin-platform API/integration suite. They are all administrator-only
+    # system capabilities, so duplicating them in this representative authz
+    # matrix provides no additional permission-path coverage.
+    "plugin_source:create:any",
+    "plugin_source:read:any",
+    "plugin_source:update:any",
+    "plugin_source:delete:any",
+    "plugin_source:enable:any",
+    "plugin_source:disable:any",
+    "plugin_source:reconcile:any",
+    "plugin_catalog:read:any",
+    "plugin_catalog:hydrate_documentation:any",
+    "plugin_registry:read:any",
+    "plugin_registry:install:any",
 }

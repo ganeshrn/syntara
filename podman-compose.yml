@@ -124,6 +124,8 @@ services:
       args:
         DOWNSTREAM_OVERRIDE: ${DOWNSTREAM_OVERRIDE:-scratch}
         BRANDING: ${BRANDING:-false}
+      additional_contexts:
+        plugin-sdk: ../../syntara-plugin-sdk
       context: ./backend
       dockerfile: containers/syntara/Containerfile
     image: ${APP_IMAGE:-localhost/syntara:latest}
@@ -214,8 +216,6 @@ services:
     image: ${APP_IMAGE:-localhost/syntara:latest}
     restart: unless-stopped
     command: [python, -m, syntara.workflows.worker]
-    extra_hosts: # Dev mode: resolves 'syntara' to host when API runs outside containers
-      - "syntara:host-gateway"
     environment:
       - APP_DB_HOST=database
       - APP_DB_PORT=5432
@@ -302,8 +302,6 @@ services:
     image: ${APP_IMAGE:-localhost/syntara:latest}
     restart: unless-stopped
     command: [python, -m, syntara.workflows.background_worker]
-    extra_hosts:
-      - "syntara:host-gateway"
     environment:
       - APP_DB_HOST=database
       - APP_DB_PORT=5432

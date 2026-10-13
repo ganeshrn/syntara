@@ -9,6 +9,11 @@ export const IntegrationForm = lazy(() =>
   import('../routes/configuration/integrations/form/IntegrationForm').then((m) => ({ default: m.IntegrationForm }))
 )
 export const Integrations = lazy(() => import('../routes/configuration/integrations/Integrations'))
+export const PluginIntegrations = lazy(() =>
+  import('../routes/configuration/plugin-integrations/PluginIntegrations').then((m) => ({
+    default: m.PluginIntegrations,
+  }))
+)
 export const IntegrationDetail = lazy(() =>
   import('../routes/configuration/integrations/IntegrationDetail').then((m) => ({ default: m.IntegrationDetail }))
 )
@@ -84,3 +89,9 @@ export const ServiceAccountDetail = lazy(() =>
 )
 export const Credentials = lazy(() => import('../routes/configuration/credentials/Credentials'))
 export const CredentialDetail = lazy(() => import('../routes/configuration/credentials/CredentialDetail'))
+export const Plugins = lazy(() =>
+  import('../routes/configuration/plugins/Plugins').then((m) => ({ default: m.Plugins }))
+)
+export const PluginDetail = lazy(() =>
+  import('../routes/configuration/plugins/PluginDetail').then((m) => ({ default: m.PluginDetail }))
+)

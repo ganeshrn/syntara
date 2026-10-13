@@ -192,7 +192,10 @@ def _definition_to_dict(wf_def: WorkflowDefinition | dict[str, Any]) -> dict[str
     """
     if isinstance(wf_def, dict):
         return wf_def
-    return wf_def.model_dump(exclude_defaults=True)
+    # Workflow definitions are stored in JSONB.  ``mode="json"`` keeps the
+    # normalized shape while converting typed fields such as an external
+    # action's selected plugin integration UUID to JSON-safe strings.
+    return wf_def.model_dump(mode="json", exclude_defaults=True)
 
 
 # ============================================================================

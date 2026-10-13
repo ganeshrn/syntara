@@ -23,7 +23,11 @@ from syntara.plugin_platform.models.registry import RunnerProfile, RunnerProfile
 
 CONTAINER_RUNTIME_ABI: Literal["syntara.container/v1alpha1"] = "syntara.container/v1alpha1"
 _DRIVER_PATTERN = r"^[a-z][a-z0-9-]*\.v[1-9][0-9]*$"
-_IMAGE_DIGEST_PATTERN = r"^[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$"
+# Include ``:`` so a local or on-premises registry can use a non-default port
+# (for example ``localhost:8443/namespace/runner@sha256:...``). The value is
+# still an immutable image digest and is admitted server-side, never supplied
+# by a workflow or plugin artifact.
+_IMAGE_DIGEST_PATTERN = r"^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$"
 _JSON_FIELD_MAX_BYTES = 65_536
 
 if TYPE_CHECKING:

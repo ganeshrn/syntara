@@ -18,13 +18,17 @@ from syntara.plugin_platform.exceptions import InstalledPluginNotFoundError, Plu
 from syntara.plugin_platform.models.registry import (
     InstalledPlugin,
     InstalledPluginAction,
+    InstalledPluginCredentialType,
+    InstalledPluginIntegrationType,
     PluginGenerationMember,
     PluginRegistryGeneration,
     PluginRegistryState,
 )
 from syntara.plugin_platform.schemas import (
     InstalledPluginActionRead,
+    InstalledPluginCredentialTypeRead,
     InstalledPluginDetailRead,
+    InstalledPluginIntegrationTypeRead,
     InstalledPluginListResponse,
     InstalledPluginRead,
 )
@@ -130,6 +134,24 @@ class InstalledPluginBrowseService(BaseService):
             .order_by(col(InstalledPluginAction.target_name).asc())
         )
         actions = list((await self.session.exec(action_statement)).all())
+        integration_types = list(
+            (
+                await self.session.exec(
+                    select(InstalledPluginIntegrationType)
+                    .where(col(InstalledPluginIntegrationType.plugin_installation_id) == plugin.id)
+                    .order_by(col(InstalledPluginIntegrationType.type_id).asc())
+                )
+            ).all()
+        )
+        credential_types = list(
+            (
+                await self.session.exec(
+                    select(InstalledPluginCredentialType)
+                    .where(col(InstalledPluginCredentialType.plugin_installation_id) == plugin.id)
+                    .order_by(col(InstalledPluginCredentialType.type_id).asc())
+                )
+            ).all()
+        )
         return InstalledPluginDetailRead(
             id=plugin.id,
             namespace=plugin.namespace,
@@ -144,6 +166,8 @@ class InstalledPluginBrowseService(BaseService):
             installed_at=plugin.created_at,
             registry_generation=generation.generation,
             actions=[self._action_read(action) for action in actions],
+            integration_types=[self._integration_type_read(integration) for integration in integration_types],
+            credential_types=[self._credential_type_read(credential) for credential in credential_types],
         )
 
     async def _active_snapshot(self) -> tuple[PluginRegistryGeneration | None, dict[UUID, bool]]:
@@ -198,7 +222,35 @@ class InstalledPluginBrowseService(BaseService):
             runtime_kind=action.runtime_kind,
             runtime_abi=action.runtime_abi,
             image_digest=action.image_digest,
+            integration_type_revision_id=action.integration_type_revision_id,
             input_schema=action.input_schema,
             output_schema=action.output_schema,
             error_schema=action.error_schema,
+        )
+
+    @staticmethod
+    def _integration_type_read(integration: InstalledPluginIntegrationType) -> InstalledPluginIntegrationTypeRead:
+        """Expose a safe immutable connection contract for authoring."""
+        return InstalledPluginIntegrationTypeRead(
+            id=integration.id,
+            type_id=integration.type_id,
+            display_name=integration.display_name,
+            description=integration.description,
+            endpoint_kinds=integration.endpoint_kinds,
+            credential_type_ids=integration.credential_type_ids,
+            configuration_schema=integration.configuration_schema,
+        )
+
+    @staticmethod
+    def _credential_type_read(credential: InstalledPluginCredentialType) -> InstalledPluginCredentialTypeRead:
+        """Expose a safe recipe contract, never a saved credential value."""
+        return InstalledPluginCredentialTypeRead(
+            id=credential.id,
+            integration_type_revision_id=credential.integration_type_revision_id,
+            type_id=credential.type_id,
+            display_name=credential.display_name,
+            description=credential.description,
+            credential_schema=credential.credential_schema,
+            secret_field_names=credential.secret_field_names,
+            issuance=credential.issuance,
         )

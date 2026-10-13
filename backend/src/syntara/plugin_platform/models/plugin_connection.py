@@ -1,9 +1,9 @@
 """Project-scoped identities for later plugin integration connections.
 
-This first record deliberately stores neither endpoint configuration nor a
-credential reference. Those require separately approved endpoint, credential,
-and broker boundaries. It only pins the immutable integration-type revision and
-one endpoint kind that the installed plugin declared.
+The connection persists verified non-secret configuration and a reference to a
+Syntara-managed encrypted secret. It never stores credential material in the
+connection row or returns it through the API. Runtime delivery still requires a
+separate server-owned credential broker.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from typing import ClassVar
 from uuid import UUID  # noqa: TC003 - SQLModel resolves table annotations at class construction.
 
 from sqlalchemy import Boolean, Column, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlmodel import Field
 
@@ -23,8 +24,9 @@ from syntara.core.models.base.user_owned import UserOwnedResource
 class PluginConnection(NamedResource, UserOwnedResource, table=True):
     """A named project connection pinned to an installed integration type.
 
-    The record is intentionally only a non-secret selection boundary. It is
-    not an endpoint, credential, OAuth session, or executable runtime route.
+    The record pins immutable installed contract revisions, verified non-secret
+    configuration, and an encrypted secret reference. It is not an executable
+    runtime route or an OAuth session.
     """
 
     __tablename__ = "plugin_connections"
@@ -34,7 +36,9 @@ class PluginConnection(NamedResource, UserOwnedResource, table=True):
         "description",
         "project_id",
         "integration_type_revision_id",
+        "credential_type_revision_id",
         "endpoint_kind",
+        "configuration",
         "enabled",
         "created_by",
         "updated_by",
@@ -72,6 +76,35 @@ class PluginConnection(NamedResource, UserOwnedResource, table=True):
         sa_type=String(63),  # type: ignore[call-overload]
         description="One non-secret endpoint kind declared by the installed integration type.",
     )
+    configuration: dict[str, object] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB, nullable=False, server_default=text("'{}'::jsonb")),
+        description="Validated non-secret connection configuration from the installed integration contract.",
+    )
+    credential_type_revision_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey(
+                "installed_plugin_credential_types.id",
+                name="fk_plugin_connections_credential_type_revision",
+                ondelete="RESTRICT",
+            ),
+            nullable=True,
+            index=True,
+        ),
+        description="Exact immutable installed credential recipe used by this connection.",
+    )
+    secret_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("secrets.id", name="fk_plugin_connections_secret", ondelete="RESTRICT"),
+            nullable=True,
+            index=True,
+        ),
+        description="Syntara-managed encrypted credential material; never returned to clients.",
+    )
     enabled: bool = Field(
         default=True,
         sa_column=Column(Boolean, nullable=False, server_default=text("true")),
@@ -83,6 +116,7 @@ class PluginConnection(NamedResource, UserOwnedResource, table=True):
         *UserOwnedResource.__filterable_fields__,
         "project_id",
         "integration_type_revision_id",
+        "credential_type_revision_id",
         "endpoint_kind",
         "enabled",
     ]

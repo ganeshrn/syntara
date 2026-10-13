@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         CatalogSourceNotFoundError,
         CatalogSourceReconciliationUnavailableError,
         InstalledPluginNotFoundError,
+        PluginConnectionError,
     )
 
 logger = structlog.stdlib.get_logger(__name__)
@@ -168,6 +169,40 @@ def catalog_plugin_ambiguous_handler(request: Request, exc: "CatalogPluginIdenti
         title="Catalog Plugin Identity Ambiguous",
         detail=exc.message,
         code="CATALOG_PLUGIN_IDENTITY_AMBIGUOUS",
+        retryable=False,
+        instance=str(request.url),
+    )
+
+
+def plugin_connection_handler(request: Request, exc: "PluginConnectionError") -> JSONResponse:
+    """Return one stable failure without reflecting configuration or secret input."""
+    logger.info("plugin_connection_rejected", code=exc.code)
+    if exc.code == "connection-not-found":
+        return create_problem_details_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            problem_type=PROBLEM_TYPES["resource_not_found"],
+            title="Plugin Connection Not Found",
+            detail="The plugin connection no longer exists or is not accessible.",
+            code="PLUGIN_CONNECTION_NOT_FOUND",
+            retryable=False,
+            instance=str(request.url),
+        )
+    if exc.code == "connection-in-use":
+        return create_problem_details_response(
+            status_code=status.HTTP_409_CONFLICT,
+            problem_type=PROBLEM_TYPES["name_conflict"],
+            title="Plugin Connection In Use",
+            detail="This connection is pinned by a workflow revision and cannot be deleted.",
+            code="PLUGIN_CONNECTION_IN_USE",
+            retryable=False,
+            instance=str(request.url),
+        )
+    return create_problem_details_response(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        problem_type=PROBLEM_TYPES["validation_error"],
+        title="Plugin Connection Invalid",
+        detail="The connection does not satisfy the installed plugin contract.",
+        code="PLUGIN_CONNECTION_INVALID",
         retryable=False,
         instance=str(request.url),
     )

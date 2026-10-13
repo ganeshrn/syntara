@@ -6,7 +6,10 @@ import {
   EditIntegration,
   IntegrationDetail,
   IntegrationForm,
+  PluginDetail,
+  PluginIntegrations,
   Integrations,
+  Plugins,
 } from '../lazyRoutes'
 import { makeRouteComponent } from '../makeRouteComponent'
 import { listSearchParams } from '../routeSearchParams'
@@ -24,9 +27,24 @@ export const configurationRoutes = [
   }),
   createRoute({
     getParentRoute: () => rootRoute,
+    path: '/configuration/plugins',
+    component: makeRouteComponent(<Plugins />, { action: 'read', resourceType: 'plugin_catalog' }),
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/configuration/plugins/$sourceId/$namespace/$pluginName',
+    component: makeRouteComponent(<PluginDetail />, { action: 'read', resourceType: 'plugin_catalog' }),
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
     path: '/configuration/integrations',
     validateSearch: integrationsSearch,
     component: makeRouteComponent(<Integrations />, { action: 'read', resourceType: 'integration' }),
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/configuration/plugin-integrations',
+    component: makeRouteComponent(<PluginIntegrations />, { action: 'read', resourceType: 'plugin_connection' }),
   }),
   createRoute({
     getParentRoute: () => rootRoute,

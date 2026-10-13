@@ -194,7 +194,7 @@ class CatalogReconciliationService:
                             artifact_repository=entry["artifactRepository"],
                             artifact_digest=entry["artifactDigest"],
                             documentation_digest=entry["documentationDigest"],
-                            runtime_ownership=entry["runtimeOwnership"],
+                            runtime_ownerships=entry["runtimeOwnerships"],
                             deprecated=entry.get("deprecated", False),
                             withdrawn=entry.get("withdrawn", False),
                             canonical_entry=validate_jsonb_size(
@@ -365,9 +365,18 @@ def _catalog_entry(value: object) -> dict[str, Any]:
         "artifactRepository",
         "artifactDigest",
         "documentationDigest",
-        "runtimeOwnership",
+        "runtimeOwnerships",
     }
-    if not required.issubset(entry) or any(not isinstance(entry[field], str) for field in required):
+    string_fields = required - {"runtimeOwnerships"}
+    ownerships = entry.get("runtimeOwnerships")
+    if (
+        not required.issubset(entry)
+        or any(not isinstance(entry[field], str) for field in string_fields)
+        or not isinstance(ownerships, list)
+        or not ownerships
+        or len(ownerships) != len(set(ownerships))
+        or any(ownership not in {"platform-runner", "custom-workload"} for ownership in ownerships)
+    ):
         msg = "Trusted catalog index entry has invalid required fields"
         raise CatalogSourceConfigurationError(msg)
     if not isinstance(entry.get("deprecated", False), bool) or not isinstance(entry.get("withdrawn", False), bool):

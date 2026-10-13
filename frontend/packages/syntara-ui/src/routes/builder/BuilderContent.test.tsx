@@ -39,6 +39,9 @@ vi.mock('../../client', () => ({
     useQuery: vi.fn(),
     useMutation: vi.fn(),
   },
+  pluginPlatformClient: {
+    useQuery: vi.fn(() => ({ data: { resources: [] }, error: null, isPending: false })),
+  },
   authMiddleware: { onRequest: vi.fn() },
   interfaceTagMiddleware: { onRequest: vi.fn() },
 }))

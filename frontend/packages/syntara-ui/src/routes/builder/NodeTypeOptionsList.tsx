@@ -28,7 +28,8 @@ type NodeTypeOptionsListProps = {
 
 export function NodeTypeOptionsList(props: NodeTypeOptionsListProps) {
   return props.nodeTypes.map((nodeType) => {
-    const { icon, id } = resolveIconForType({ nodeTypeId: nodeType.id })
+    const { icon: resolvedIcon, id } = resolveIconForType({ nodeTypeId: nodeType.id })
+    const icon = nodeType.icon ?? resolvedIcon
     const accentColor = getAddNodePanelColor(nodeType.id)
     // AAP nodes use gray icon (no color tint)
     const isAAPNode = AAP_NODE_IDS.has(nodeType.id as (typeof RegistryNodeId)[keyof typeof RegistryNodeId])

@@ -29,8 +29,11 @@ WORKDIR /opt/app-root/src
 # setup.py (git).  uv is the project's package manager.
 # When BUILDER_IMAGE is overridden to uv-builder-rhel9, the dnf packages
 # are already present (no-ops) and the uv guard skips the pip install.
-RUN dnf install --setopt=install_weak_deps=0 --nodocs -y \
-        cmake gcc gcc-c++ git libatomic ninja-build \
+# UBI images provide the dependencies below from their public ubi-* repos.
+# Constrain resolution to those repos so a developer host's mounted RHEL
+# subscription configuration cannot make a local build require an entitlement.
+RUN dnf --disablerepo='*' --enablerepo='ubi-*' install --setopt=install_weak_deps=0 --nodocs -y \
+        cargo cmake gcc gcc-c++ git libatomic ninja-build openssl-devel python3.12-devel rust \
     && dnf clean all \
     && (command -v uv >/dev/null 2>&1 || pip3.12 install --no-cache-dir uv==0.12.3) \
     && [ -f /usr/local/bin/uv ] || { command -v uv && ln -s "$(command -v uv)" /usr/local/bin/uv; }
@@ -38,6 +41,14 @@ RUN dnf install --setopt=install_weak_deps=0 --nodocs -y \
 # Copy dependency files first (for layer caching)
 COPY pyproject.toml uv.lock LICENSE README.md alembic.ini ./
 COPY tools/ci/sanitize_pyproject_for_hermetic.py /usr/local/bin/sanitize_pyproject_for_hermetic.py
+
+# The backend consumes the contracts package from the sibling Plugin SDK
+# checkout. It is a named build context, so the source remains owned by the
+# SDK repository and is not vendored into this repository. The package build
+# hook reads the canonical schemas as well as its own Python source. The path
+# matches the editable source reference recorded in pyproject.toml and uv.lock.
+COPY --from=plugin-sdk contracts/ /opt/syntara-plugin-sdk/contracts/
+COPY --from=plugin-sdk sdks/python/packages/contracts/ /opt/syntara-plugin-sdk/sdks/python/packages/contracts/
 
 # Copy application code (excluding ./tools)
 COPY src/ ./src/
@@ -94,7 +105,18 @@ RUN if [ -n "${PIP_FIND_LINKS:-}" ]; then \
         uv sync --frozen --no-dev --no-editable --no-index --find-links "${PIP_FIND_LINKS}" --offline; \
     else \
         # --- Local (non-hermetic) build ---
-        uv sync --frozen --no-dev; \
+        # The published cryptography ARM64 wheels execute unsupported CPU
+        # instructions in the Podman VM used by some Apple Silicon hosts.
+        # Build that package from source on ARM64 so local `make run-all`
+        # produces a portable image. Hermetic product builds continue to use
+        # their pre-fetched wheel set above.
+        if [ "$(uname -m)" = "aarch64" ]; then \
+            uv sync --frozen --no-dev --no-editable && \
+            cryptography_version="$(uv pip show cryptography | sed -n 's/^Version: //p')" && \
+            uv pip install --no-binary cryptography --reinstall --no-deps "cryptography==${cryptography_version}"; \
+        else \
+            uv sync --frozen --no-dev --no-editable; \
+        fi; \
     fi
 
 # Stage 2: Runtime - minimal image with Python and app copied from builder
@@ -106,7 +128,7 @@ ARG APP_SEGMENT_WRITE_KEY=""
 USER root
 
 # Install Python 3.12 runtime and dependencies via RPM
-RUN microdnf install --setopt=install_weak_deps=0 --nodocs -y \
+RUN microdnf --disablerepo='*' --enablerepo='ubi-*' install --setopt=install_weak_deps=0 --nodocs -y \
         libatomic \
         python3.12 \
         python3.12-pip \

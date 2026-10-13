@@ -1,5 +1,6 @@
 """Authenticated discovery and administrator-install APIs for accepted plugin catalog projections."""
 
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, Path, Query, Request, status
@@ -31,7 +32,9 @@ from syntara.plugin_platform.services.catalog_browse_service import CatalogBrows
 from syntara.plugin_platform.services.catalog_installation_service import CatalogPluginInstallationService
 from syntara.plugin_platform.services.local_poc_catalog_reconciliation_service import (
     LocalPocCatalogDocumentationHydrationService,
+    build_local_poc_catalog_installation_service,
 )
+from syntara.plugin_platform.services.oci_distribution_client import OciDistributionClient
 
 router = SyntaraRouter(prefix="/catalog/plugins", tags=["Plugin Platform"])
 
@@ -51,26 +54,32 @@ def get_catalog_browse_service(
     return CatalogBrowseService(db, current_user)
 
 
-def get_catalog_plugin_installation_service(
+async def get_catalog_plugin_installation_service(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> CatalogPluginInstallationService:
+) -> AsyncIterator[CatalogPluginInstallationService]:
     """Resolve the deployment-owned installer without accepting browser runtime inputs.
 
     A production composition root must place a callable named
     ``plugin_catalog_installation_service_factory`` on application state. Its
     only input is the request database session; it owns the registry access,
-    trust, and workload-admission adapters.  No fallback is provided because a
-    local permissive resolver or evaluator would weaken the installation
-    boundary.
+    trust, and workload-admission adapters.  The sole exception is the
+    explicitly enabled loopback-only local-PoC composition.  It still verifies
+    the catalog-selected artifact and only resolves a server-owned persisted
+    platform-runner profile; it cannot admit publisher workload images.
     """
+    if get_settings().plugin_platform_local_poc_enabled:
+        async with OciDistributionClient() as client:
+            yield build_local_poc_catalog_installation_service(db, registry_client=client)
+        return
+
     factory = getattr(request.app.state, "plugin_catalog_installation_service_factory", None)
     if not callable(factory):
         raise CatalogPluginInstallationUnavailableError
     service = factory(db)
     if not isinstance(service, CatalogPluginInstallationService):
         raise CatalogPluginInstallationUnavailableError
-    return service
+    yield service
 
 
 def get_catalog_documentation_hydration_service(

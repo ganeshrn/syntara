@@ -23,10 +23,17 @@ export const AppRoute = {
       DetailTab: '/configuration/integrations/:integrationId/:tab',
       Edit: '/configuration/integrations/:integrationId/edit',
     },
+    PluginIntegrations: {
+      Root: '/configuration/plugin-integrations',
+    },
     Credentials: {
       Root: '/configuration/credentials',
       Detail: '/configuration/credentials/:credentialId',
       DetailTab: '/configuration/credentials/:credentialId/:tab',
+    },
+    Plugins: {
+      Root: '/configuration/plugins',
+      Detail: '/configuration/plugins/:sourceId/:namespace/:pluginName',
     },
   },
   SystemAdministration: {

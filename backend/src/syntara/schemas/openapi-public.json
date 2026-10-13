@@ -20188,6 +20188,823 @@
         }
       }
     },
+    "/plugin_connections": {
+      "post": {
+        "summary": "Create plugin connection",
+        "description": "Create a typed connection and store its credential through SecretService.",
+        "operationId": "create_plugin_connection",
+        "tags": [
+          "Plugin Platform"
+        ],
+        "x-app-permission": {
+          "resource": "plugin_connection",
+          "action": "create"
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginConnectionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginConnectionRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/bad-request",
+                  "title": "Bad Request",
+                  "detail": "The request was malformed or contained invalid parameters",
+                  "code": "BAD_REQUEST",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/unauthorized",
+                  "title": "Unauthorized",
+                  "detail": "Authentication is required to access this resource",
+                  "code": "UNAUTHORIZED",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/forbidden",
+                  "title": "Forbidden",
+                  "detail": "You do not have permission to access this resource",
+                  "code": "FORBIDDEN",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/not-found",
+                  "title": "Resource Not Found",
+                  "detail": "No resource exists with the provided identifier",
+                  "code": "NOT_FOUND",
+                  "retryable": false,
+                  "instance": "/api/v1/workflows"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/conflict",
+                  "title": "Conflict",
+                  "detail": "The request conflicts with the current state of the resource",
+                  "code": "CONFLICT",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/validation-error",
+                  "title": "Validation Error",
+                  "detail": "Field 'name' must be between 1 and 255 characters",
+                  "code": "VALIDATION_ERROR",
+                  "retryable": false,
+                  "instance": "/api/v1/workflows"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/rate-limited",
+                  "title": "Too Many Requests",
+                  "detail": "Rate limit exceeded. Try again in 60 seconds.",
+                  "code": "RATE_LIMITED",
+                  "retryable": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/internal-error",
+                  "title": "Internal Server Error",
+                  "detail": "An unexpected error occurred",
+                  "code": "INTERNAL_ERROR",
+                  "retryable": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List plugin connections",
+        "description": "List safe connection metadata for one workflow project and action type.",
+        "operationId": "list_plugin_connections",
+        "tags": [
+          "Plugin Platform"
+        ],
+        "x-app-permission": {
+          "resource": "plugin_connection",
+          "action": "read"
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100,
+              "default": 20,
+              "description": "Maximum number of results per page",
+              "title": "Limit"
+            },
+            "description": "Maximum number of results per page"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pagination cursor from previous response",
+              "title": "Cursor"
+            },
+            "description": "Pagination cursor from previous response"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^-?[a-z][a-z0-9_]*$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sort parameter (e.g., 'name', '-created_at')",
+              "title": "Sort"
+            },
+            "description": "Sort parameter (e.g., 'name', '-created_at')"
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "description": "Include total count in response (expensive)",
+              "title": "Include Total"
+            },
+            "description": "Include total count in response (expensive)"
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "integration_type_revision_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Integration Type Revision Id"
+            }
+          },
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enabled"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginConnectionListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/bad-request",
+                  "title": "Bad Request",
+                  "detail": "The request was malformed or contained invalid parameters",
+                  "code": "BAD_REQUEST",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/unauthorized",
+                  "title": "Unauthorized",
+                  "detail": "Authentication is required to access this resource",
+                  "code": "UNAUTHORIZED",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/forbidden",
+                  "title": "Forbidden",
+                  "detail": "You do not have permission to access this resource",
+                  "code": "FORBIDDEN",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/not-found",
+                  "title": "Resource Not Found",
+                  "detail": "No resource exists with the provided identifier",
+                  "code": "NOT_FOUND",
+                  "retryable": false,
+                  "instance": "/api/v1/workflows"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/conflict",
+                  "title": "Conflict",
+                  "detail": "The request conflicts with the current state of the resource",
+                  "code": "CONFLICT",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/validation-error",
+                  "title": "Validation Error",
+                  "detail": "Field 'name' must be between 1 and 255 characters",
+                  "code": "VALIDATION_ERROR",
+                  "retryable": false,
+                  "instance": "/api/v1/workflows"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/rate-limited",
+                  "title": "Too Many Requests",
+                  "detail": "Rate limit exceeded. Try again in 60 seconds.",
+                  "code": "RATE_LIMITED",
+                  "retryable": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/internal-error",
+                  "title": "Internal Server Error",
+                  "detail": "An unexpected error occurred",
+                  "code": "INTERNAL_ERROR",
+                  "retryable": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugin_connections/{connection_id}": {
+      "patch": {
+        "summary": "Enable or disable plugin connection",
+        "description": "Enable or disable one project connection without exposing its credential.",
+        "operationId": "update_plugin_connection",
+        "tags": [
+          "Plugin Platform"
+        ],
+        "x-app-permission": {
+          "resource": "plugin_connection",
+          "action": "update"
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginConnectionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginConnectionRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/bad-request",
+                  "title": "Bad Request",
+                  "detail": "The request was malformed or contained invalid parameters",
+                  "code": "BAD_REQUEST",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/unauthorized",
+                  "title": "Unauthorized",
+                  "detail": "Authentication is required to access this resource",
+                  "code": "UNAUTHORIZED",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/forbidden",
+                  "title": "Forbidden",
+                  "detail": "You do not have permission to access this resource",
+                  "code": "FORBIDDEN",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/not-found",
+                  "title": "Resource Not Found",
+                  "detail": "No resource exists with the provided identifier",
+                  "code": "NOT_FOUND",
+                  "retryable": false,
+                  "instance": "/api/v1/workflows"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/conflict",
+                  "title": "Conflict",
+                  "detail": "The request conflicts with the current state of the resource",
+                  "code": "CONFLICT",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/validation-error",
+                  "title": "Validation Error",
+                  "detail": "Field 'name' must be between 1 and 255 characters",
+                  "code": "VALIDATION_ERROR",
+                  "retryable": false,
+                  "instance": "/api/v1/workflows"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/rate-limited",
+                  "title": "Too Many Requests",
+                  "detail": "Rate limit exceeded. Try again in 60 seconds.",
+                  "code": "RATE_LIMITED",
+                  "retryable": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/internal-error",
+                  "title": "Internal Server Error",
+                  "detail": "An unexpected error occurred",
+                  "code": "INTERNAL_ERROR",
+                  "retryable": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete plugin connection",
+        "description": "Delete an unused connection and its encrypted credential material.",
+        "operationId": "delete_plugin_connection",
+        "tags": [
+          "Plugin Platform"
+        ],
+        "x-app-permission": {
+          "resource": "plugin_connection",
+          "action": "delete"
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/bad-request",
+                  "title": "Bad Request",
+                  "detail": "The request was malformed or contained invalid parameters",
+                  "code": "BAD_REQUEST",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/unauthorized",
+                  "title": "Unauthorized",
+                  "detail": "Authentication is required to access this resource",
+                  "code": "UNAUTHORIZED",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/forbidden",
+                  "title": "Forbidden",
+                  "detail": "You do not have permission to access this resource",
+                  "code": "FORBIDDEN",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/not-found",
+                  "title": "Resource Not Found",
+                  "detail": "No resource exists with the provided identifier",
+                  "code": "NOT_FOUND",
+                  "retryable": false,
+                  "instance": "/api/v1/workflows"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/conflict",
+                  "title": "Conflict",
+                  "detail": "The request conflicts with the current state of the resource",
+                  "code": "CONFLICT",
+                  "retryable": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/validation-error",
+                  "title": "Validation Error",
+                  "detail": "Field 'name' must be between 1 and 255 characters",
+                  "code": "VALIDATION_ERROR",
+                  "retryable": false,
+                  "instance": "/api/v1/workflows"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/rate-limited",
+                  "title": "Too Many Requests",
+                  "detail": "Rate limit exceeded. Try again in 60 seconds.",
+                  "code": "RATE_LIMITED",
+                  "retryable": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorData"
+                },
+                "example": {
+                  "type": "https://api.example.com/errors/internal-error",
+                  "title": "Internal Server Error",
+                  "detail": "An unexpected error occurred",
+                  "code": "INTERNAL_ERROR",
+                  "retryable": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/catalog/plugins": {
       "get": {
         "summary": "List catalog plugins",
@@ -20340,26 +21157,6 @@
                 }
               ],
               "title": "Version"
-            }
-          },
-          {
-            "name": "runtime_ownership",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "enum": [
-                    "platform-runner",
-                    "custom-workload"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Runtime Ownership"
             }
           },
           {
@@ -50454,7 +51251,7 @@
           "artifact_repository",
           "artifact_digest",
           "documentation_digest",
-          "runtime_ownership",
+          "runtime_ownerships",
           "deprecated",
           "withdrawn",
           "created_at",
@@ -50500,13 +51297,18 @@
             "type": "string",
             "title": "Documentation Digest"
           },
-          "runtime_ownership": {
-            "type": "string",
-            "enum": [
-              "platform-runner",
-              "custom-workload"
-            ],
-            "title": "Runtime Ownership"
+          "runtime_ownerships": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "platform-runner",
+                "custom-workload"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "title": "Runtime Ownerships"
           },
           "deprecated": {
             "type": "boolean",
@@ -50787,6 +51589,18 @@
             "type": "string",
             "title": "Image Digest"
           },
+          "integration_type_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integration Type Revision Id"
+          },
           "input_schema": {
             "type": "object",
             "additionalProperties": true,
@@ -50949,8 +51763,359 @@
             "items": {
               "$ref": "#/components/schemas/InstalledPluginActionRead"
             }
+          },
+          "integration_types": {
+            "type": "array",
+            "title": "Integration Types",
+            "items": {
+              "$ref": "#/components/schemas/InstalledPluginIntegrationTypeRead"
+            }
+          },
+          "credential_types": {
+            "type": "array",
+            "title": "Credential Types",
+            "items": {
+              "$ref": "#/components/schemas/InstalledPluginCredentialTypeRead"
+            }
           }
         }
+      },
+      "InstalledPluginIntegrationTypeRead": {
+        "type": "object",
+        "title": "InstalledPluginIntegrationTypeRead",
+        "description": "Safe installed integration contract needed to configure a connection.",
+        "required": [
+          "id",
+          "type_id",
+          "display_name",
+          "description",
+          "endpoint_kinds",
+          "credential_type_ids",
+          "configuration_schema"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type_id": {
+            "type": "string",
+            "title": "Type Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "endpoint_kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Endpoint Kinds"
+          },
+          "credential_type_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Credential Type Ids"
+          },
+          "configuration_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Configuration Schema"
+          }
+        }
+      },
+      "InstalledPluginCredentialTypeRead": {
+        "type": "object",
+        "title": "InstalledPluginCredentialTypeRead",
+        "description": "Safe installed credential recipe; secret values are never part of this contract.",
+        "required": [
+          "id",
+          "integration_type_revision_id",
+          "type_id",
+          "display_name",
+          "description",
+          "credential_schema",
+          "secret_field_names",
+          "issuance"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "integration_type_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Integration Type Revision Id"
+          },
+          "type_id": {
+            "type": "string",
+            "title": "Type Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "credential_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Credential Schema"
+          },
+          "secret_field_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Secret Field Names"
+          },
+          "issuance": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Issuance"
+          }
+        }
+      },
+      "PluginConnectionCreate": {
+        "type": "object",
+        "title": "PluginConnectionCreate",
+        "description": "Create a project-scoped connection using installed immutable type revisions.",
+        "required": [
+          "name",
+          "project_id",
+          "integration_type_revision_id",
+          "credential_type_revision_id",
+          "endpoint_kind"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "integration_type_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Integration Type Revision Id"
+          },
+          "credential_type_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Credential Type Revision Id"
+          },
+          "endpoint_kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "title": "Endpoint Kind"
+          },
+          "configuration": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Configuration"
+          },
+          "credential_inputs": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Credential Inputs"
+          }
+        }
+      },
+      "PluginConnectionRead": {
+        "type": "object",
+        "title": "PluginConnectionRead",
+        "description": "Safe project connection metadata. Credential values and secret IDs are excluded.",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "project_id",
+          "integration_type_revision_id",
+          "credential_type_revision_id",
+          "endpoint_kind",
+          "configuration",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "integration_type_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Integration Type Revision Id"
+          },
+          "credential_type_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Type Revision Id"
+          },
+          "endpoint_kind": {
+            "type": "string",
+            "title": "Endpoint Kind"
+          },
+          "configuration": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Configuration"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        }
+      },
+      "PluginConnectionUpdate": {
+        "type": "object",
+        "title": "PluginConnectionUpdate",
+        "description": "Mutable lifecycle state for an existing project connection.",
+        "additionalProperties": false,
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        }
+      },
+      "PluginConnectionListResponse": {
+        "type": "object",
+        "title": "PluginConnectionListResponse",
+        "description": "Non-secret plugin connection list.",
+        "required": [
+          "resources"
+        ],
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "Cursor for next page of results"
+          },
+          "prev": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev",
+            "description": "Cursor for previous page of results"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total",
+            "description": "Total count of resources (only when include_total=true)"
+          },
+          "resources": {
+            "type": "array",
+            "maxItems": 100,
+            "title": "Resources",
+            "description": "Array of resources in current page",
+            "items": {
+              "$ref": "#/components/schemas/PluginConnectionRead"
+            }
+          }
+        },
+        "examples": [
+          {
+            "next": "eyJpZCI6InV1aWQifQ",
+            "total": 150
+          },
+          {
+            "next": "eyJpZCI6Im5leHQifQ",
+            "prev": "eyJpZCI6InByZXYifQ"
+          }
+        ]
       },
       "InstalledPluginListResponse": {
         "type": "object",
@@ -54608,7 +55773,8 @@
           "approval",
           "http_request",
           "internal_activity",
-          "script"
+          "script",
+          "external_action"
         ]
       },
       "CurrentActivity": {
@@ -55893,6 +57059,9 @@
                   "$ref": "#/components/schemas/HTTPRequestNode"
                 },
                 {
+                  "$ref": "#/components/schemas/ExternalActionNode"
+                },
+                {
                   "$ref": "#/components/schemas/AgenticNode"
                 },
                 {
@@ -55927,6 +57096,7 @@
                   "condition": "#/components/schemas/ConditionNode",
                   "converge": "#/components/schemas/ConvergeNode",
                   "http_request": "#/components/schemas/HTTPRequestNode",
+                  "external_action": "#/components/schemas/ExternalActionNode",
                   "loop": "#/components/schemas/LoopNode",
                   "script": "#/components/schemas/ScriptNode",
                   "switch": "#/components/schemas/SwitchNode",
@@ -56228,6 +57398,95 @@
         ],
         "title": "HTTPRequestNode",
         "description": "HTTP request executor node."
+      },
+      "ExternalActionNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+            "title": "Id",
+            "description": "Unique identifier for the node within the workflow"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Human-readable name for the node"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Human-readable description of the node purpose"
+          },
+          "outputs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputs",
+            "description": "Output extraction mapping"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodePosition"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional UI position hint"
+          },
+          "type": {
+            "type": "string",
+            "const": "external_action",
+            "title": "Type"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ExternalActionParameters"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodeSettingsFull"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "parameters"
+        ],
+        "title": "ExternalActionNode",
+        "description": "One installed plugin action, pinned when its workflow revision publishes."
       },
       "AgenticNode": {
         "properties": {
@@ -57477,6 +58736,44 @@
         ],
         "title": "APIExecutorParameters",
         "description": "Parameters for API executor (http_request activity)."
+      },
+      "ExternalActionParameters": {
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ExternalActionParameters",
+        "description": "A generic installed plugin action selected by immutable revision.\n\nThe workflow stores only the installed action revision, an optional project\nconnection identity, and structured inputs. Publication resolves and pins\nthe image and runtime route in a separate durable binding; workflow authors\ncannot provide an image, command, policy, grant, or credential here.",
+        "required": [
+          "step_revision_id"
+        ],
+        "properties": {
+          "step_revision_id": {
+            "type": "string",
+            "minLength": 69,
+            "maxLength": 256,
+            "pattern": "^[a-z0-9][a-z0-9.-]{2,190}:[a-f0-9]{64}$",
+            "title": "Step Revision Id",
+            "description": "Installed plugin action revision selected for this workflow step."
+          },
+          "plugin_connection_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plugin Connection Id",
+            "description": "Optional project-scoped plugin connection identity."
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Inputs",
+            "description": "Structured action inputs."
+          }
+        }
       },
       "AgenticExecutorParameters": {
         "properties": {

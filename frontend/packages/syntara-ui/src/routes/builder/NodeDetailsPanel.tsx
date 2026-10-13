@@ -45,6 +45,7 @@ import {
 import { NodeEditorLayout } from './NodeEditorLayout'
 import { NodeRawDataView } from './NodeRawDataView'
 import { NodeRegistry } from './registry/NodeRegistry'
+import { INSTALLED_ACTION_NODE_PREFIX } from './registry/useInstalledActionNodes'
 import type { WorkflowMetadata } from './types/workflowMetadata'
 import { resolveIconForNode, resolveIconForType } from './utils/nodeIcons'
 import { getDefaultNodeBaseName, getNodeDisplayName } from './utils/nodeNaming'
@@ -73,6 +74,7 @@ function getAddModeFormId(
   nodeTypeId: string | null | undefined,
   nodeSubtypeId: string | null | undefined
 ): string | undefined {
+  if (nodeTypeId?.startsWith(INSTALLED_ACTION_NODE_PREFIX)) return 'external-action-node-form'
   // Simple node types without subtypes
   const simpleFormMap: Record<string, string> = {
     [RegistryNodeId.TRIGGER]: 'trigger-node-form',
@@ -107,8 +109,13 @@ function getAddModeFormId(
 }
 
 /** Get formId for TASK nodes by checking executor type */
-function getTaskFormId(taskData: TaskActivity): string {
+function getTaskFormId(taskData: TaskActivity): string | undefined {
   const executor = taskData.type
+
+  // Installed actions are immutable contracts. Editing their revision in the
+  // generic Action form could silently change a pinned route, so expose their
+  // stored definition read-only until the dedicated input editor is added.
+  if (executor === ExecutorTypeEnum.EXTERNAL_ACTION) return undefined
 
   // Check if it's an AAP job template task
   if (executor === ExecutorTypeEnum.AAP_JOB_TEMPLATE) {
@@ -200,6 +207,9 @@ function renderEditModeContent(params: {
   }
 
   if (node.type === FlowNodeType.TASK) {
+    if ((node.data as TaskActivity).type === ExecutorTypeEnum.EXTERNAL_ACTION) {
+      return <NodeRawDataView node={node} />
+    }
     return (
       <TaskNodeDetails
         taskData={node.data as TaskActivity}
@@ -377,7 +387,7 @@ export function NodeDetailsPanel(props: NodeDetailsPanelProps) {
 
       // For nodes with subtypes, use the subtype's form component
       const FormComponent = selectedSubtype?.formComponent ?? selectedNode.formComponent
-      const subtypeFormProps = selectedSubtype?.formProps ?? {}
+      const subtypeFormProps = selectedSubtype?.formProps ?? selectedNode.formProps ?? {}
       const submitButtonText = 'Add step'
 
       /** Returns true if replacement succeeded, false if lookup failed. */

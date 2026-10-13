@@ -54,7 +54,7 @@ def _index() -> dict[str, Any]:
                     "artifactRepository": "syntara/plugins/github",
                     "artifactDigest": "sha256:" + "1" * 64,
                     "documentationDigest": "sha256:" + "2" * 64,
-                    "runtimeOwnership": "platform-runner",
+                    "runtimeOwnerships": ["platform-runner"],
                 },
                 {
                     "namespace": "syntara",
@@ -63,7 +63,7 @@ def _index() -> dict[str, Any]:
                     "artifactRepository": "syntara/plugins/aap",
                     "artifactDigest": "sha256:" + "3" * 64,
                     "documentationDigest": "sha256:" + "4" * 64,
-                    "runtimeOwnership": "custom-workload",
+                    "runtimeOwnerships": ["custom-workload"],
                 },
             ],
         },

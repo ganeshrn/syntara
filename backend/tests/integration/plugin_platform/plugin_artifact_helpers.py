@@ -240,7 +240,7 @@ async def seed_active_catalog(
         artifact_repository="syntara/plugins/github",
         artifact_digest=wire.manifest_digest,
         documentation_digest=wire.documentation_digest,
-        runtime_ownership=runtime_ownership,
+        runtime_ownerships=[runtime_ownership],
         canonical_entry={},
     )
     session.add(version)

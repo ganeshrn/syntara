@@ -9,8 +9,10 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from syntara.workflows.models.workflow_definition import WorkflowDefinition
 from syntara.workflows.models.workflow_version import PublishVersionRequest
 from syntara.workflows.router import (
+    _definition_to_dict,
     get_workflow,
     get_workflow_version,
     list_workflow_versions,
@@ -35,6 +37,33 @@ async def _expect_http_exception(fn: Callable[..., Coroutine[Any, Any, Any]], **
 
 class TestWorkflowEndpoints:
     """Tests for workflow router endpoint functions."""
+
+    def test_definition_to_dict_json_encodes_external_action_integration_id(self) -> None:
+        """Workflow JSONB storage receives a string, not a UUID instance."""
+        integration_id = uuid4()
+        definition = WorkflowDefinition.model_validate(
+            {
+                "schema_version": "2.0.0",
+                "name": "GitHub issue",
+                "triggers": [{"id": "start", "type": "manual_trigger", "parameters": {}}],
+                "nodes": [
+                    {
+                        "id": "create_issue",
+                        "type": "external_action",
+                        "parameters": {
+                            "step_revision_id": "syntara.github.create-issue:" + "a" * 64,
+                            "plugin_connection_id": str(integration_id),
+                            "inputs": {"title": "Create an issue"},
+                        },
+                    }
+                ],
+                "edges": [{"from": "start", "to": "create_issue"}],
+            }
+        )
+
+        serialized = _definition_to_dict(definition)
+
+        assert serialized["nodes"][0]["parameters"]["plugin_connection_id"] == str(integration_id)
 
     @pytest.mark.asyncio
     async def test_list_workflows_populates_published_version_numbers(self) -> None:

@@ -79,6 +79,24 @@
       "kind": "page",
       "parameters": [],
       "sources": ["appRoute", "navigation", "router"],
+      "template": "/configuration/plugin-integrations"
+    },
+    {
+      "kind": "page",
+      "parameters": [],
+      "sources": ["appRoute", "navigation", "router"],
+      "template": "/configuration/plugins"
+    },
+    {
+      "kind": "page",
+      "parameters": ["sourceId", "namespace", "pluginName"],
+      "sources": ["appRoute", "router"],
+      "template": "/configuration/plugins/$sourceId/$namespace/$pluginName"
+    },
+    {
+      "kind": "page",
+      "parameters": [],
+      "sources": ["appRoute", "navigation", "router"],
       "template": "/executions"
     },
     {
