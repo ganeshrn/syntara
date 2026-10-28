@@ -91,6 +91,8 @@ _ACTION_TARGET_KEYS = {
     "version",
 }
 _ACTION_TARGET_KEYS_WITH_INTEGRATION = _ACTION_TARGET_KEYS | {"integrationType"}
+_ACTION_PRESENTATION_KEY = {"inputPresentation"}
+_ACTION_SCHEMA_DIGESTS_KEY = {"schemaDigests"}
 _INTEGRATION_TARGET_KEYS = {
     "configuration",
     "credentialTypes",
@@ -116,6 +118,7 @@ _CREDENTIAL_TARGET_KEYS = {
 }
 _TARGET_METADATA_KEYS = {"description", "displayName", "name"}
 _CUSTOM_RUNTIME_KEYS = {"abi", "kind", "workload"}
+_CUSTOM_RUNNER_RUNTIME_KEYS = _CUSTOM_RUNTIME_KEYS | {"entryPoint"}
 _PLATFORM_RUNTIME_KEYS = {"driver", "kind", "operation"}
 _WORKLOAD_BINDING_KEYS = {"abi", "image"}
 _HTTP_OPERATION_KEYS = {"method", "path", "requestMap", "responseMap"}
@@ -529,11 +532,14 @@ def _action_from_target(
 ) -> _ActionBinding:
     """Validate one canonical action target and its inherited workload binding."""
     target = _mapping(raw_target, "action target")
-    _require_keys(
-        target,
-        _ACTION_TARGET_KEYS_WITH_INTEGRATION if "integrationType" in target else _ACTION_TARGET_KEYS,
-        "action target",
+    expected_keys = set(
+        _ACTION_TARGET_KEYS_WITH_INTEGRATION if "integrationType" in target else _ACTION_TARGET_KEYS
     )
+    if "inputPresentation" in target:
+        expected_keys |= _ACTION_PRESENTATION_KEY
+    if "schemaDigests" in target:
+        expected_keys |= _ACTION_SCHEMA_DIGESTS_KEY
+    _require_keys(target, expected_keys, "action target")
     if target.get("kind") != "Action":
         _unsupported_descriptor("non-action target")
     target_metadata = _mapping(target.get("metadata"), "action metadata")
@@ -560,6 +566,7 @@ def _action_from_target(
             integration_type_id=_optional_string(target.get("integrationType"), "action integration type"),
             runner_profile_revision_id=None,
             input_schema=_schema(target.get("input"), "action input schema"),
+            input_presentation=_input_presentation(target.get("inputPresentation")),
             output_schema=_schema(target.get("output"), "action output schema"),
             error_schema=_schema(target.get("error"), "action error schema"),
             canonical_definition=dict(target),
@@ -607,6 +614,7 @@ def _platform_runner_action(
             integration_type_id=_optional_string(target.get("integrationType"), "action integration type"),
             runner_profile_revision_id=profile.revision_id,
             input_schema=_schema(target.get("input"), "action input schema"),
+            input_presentation=_input_presentation(target.get("inputPresentation")),
             output_schema=_schema(target.get("output"), "action output schema"),
             error_schema=_schema(target.get("error"), "action error schema"),
             canonical_definition=definition,
@@ -669,9 +677,13 @@ def _credential_type_from_target(
 def _custom_workload_binding(runtime: Mapping[str, Any], workloads: Mapping[str, Any]) -> tuple[str, str]:
     """Return the one server-admitted workload inherited by a custom action."""
     runtime_kind = runtime.get("kind")
-    _require_keys(runtime, _CUSTOM_RUNTIME_KEYS, "custom workload runtime")
-    if runtime_kind != "custom-workload" or runtime.get("abi") != _CONTAINER_ABI:
+    if runtime_kind not in {"custom-runner", "custom-workload"} or runtime.get("abi") != _CONTAINER_ABI:
         _unsupported_descriptor("custom workload runtime")
+    if runtime_kind == "custom-runner":
+        _require_keys(runtime, _CUSTOM_RUNNER_RUNTIME_KEYS, "custom runner runtime")
+        _string(runtime.get("entryPoint"), "custom workload entry point")
+    else:
+        _require_keys(runtime, _CUSTOM_RUNTIME_KEYS, "custom workload runtime")
     workload_id = _string(runtime.get("workload"), "custom workload identifier")
     workload = _mapping(workloads.get(workload_id), "custom workload binding")
     _require_keys(workload, _WORKLOAD_BINDING_KEYS, "custom workload binding")
@@ -787,6 +799,18 @@ def _schema(value: object, context: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         _unsupported_descriptor(context)
     return value
+
+
+def _input_presentation(value: object) -> dict[str, Any] | None:
+    """Accept only the versioned, declarative RJSF presentation contract."""
+    if value is None:
+        return None
+    presentation = _mapping(value, "action input presentation")
+    _require_keys(presentation, {"renderer", "uiSchema"}, "action input presentation")
+    if presentation.get("renderer") != "rjsf.v1":
+        _unsupported_descriptor("action input presentation renderer")
+    ui_schema = _schema(presentation.get("uiSchema"), "action input presentation uiSchema")
+    return {"renderer": "rjsf.v1", "uiSchema": dict(ui_schema)}
 
 
 def _string_list(value: object, context: str) -> list[str]:

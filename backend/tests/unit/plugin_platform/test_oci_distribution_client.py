@@ -280,6 +280,23 @@ def test_locator_rejects_path_injection(locator: dict[str, str]) -> None:
         CatalogIndexLocator(**locator)
 
 
+def test_locator_allows_only_the_fixed_local_poc_http_origin() -> None:
+    locator = CatalogIndexLocator(
+        registry_origin="http://host.containers.internal:8443",
+        index_repository=_REPOSITORY,
+        channel=_CHANNEL,
+    )
+
+    assert locator.registry_origin == "http://host.containers.internal:8443"
+
+    with pytest.raises(ValueError, match="scheme must be https"):
+        CatalogIndexLocator(
+            registry_origin="http://registry.example.test:8443",
+            index_repository=_REPOSITORY,
+            channel=_CHANNEL,
+        )
+
+
 @pytest.mark.parametrize(
     "locator",
     [

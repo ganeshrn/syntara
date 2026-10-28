@@ -224,6 +224,7 @@ class InstalledPluginBrowseService(BaseService):
             image_digest=action.image_digest,
             integration_type_revision_id=action.integration_type_revision_id,
             input_schema=action.input_schema,
+            input_presentation=action.input_presentation,
             output_schema=action.output_schema,
             error_schema=action.error_schema,
         )

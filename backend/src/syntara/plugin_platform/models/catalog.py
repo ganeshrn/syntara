@@ -28,6 +28,7 @@ from syntara.core.lib.url_validation import validate_host_url
 from syntara.core.models.base import BaseResource
 from syntara.core.models.base.base_resource import AuditLevel
 from syntara.plugin_platform.source_profile import (
+    LOCAL_POC_REGISTRY_ORIGINS,
     STANDARD_CATALOG_SOURCE_MODE,
     CatalogSourceMode,
     validate_catalog_source_profile,
@@ -46,7 +47,7 @@ _MAX_RECONCILIATION_INTERVAL_SECONDS = 86_400
 
 def validate_catalog_registry_origin(value: str) -> str:
     """Normalize a registry origin before its profile applies transport policy."""
-    return validate_host_url(value)
+    return validate_host_url(value, allow_http=value in LOCAL_POC_REGISTRY_ORIGINS)
 
 
 def validate_catalog_identifier(value: str) -> str:

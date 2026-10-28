@@ -97,10 +97,17 @@ class InstalledActionCandidate(BaseModel):
     output_schema: dict[str, Any]
     error_schema: dict[str, Any]
     canonical_definition: dict[str, Any]
+    input_presentation: dict[str, Any] | None = None
 
-    @field_validator("input_schema", "output_schema", "error_schema", "canonical_definition")
+    @field_validator(
+        "input_schema", "output_schema", "error_schema", "canonical_definition", "input_presentation"
+    )
     @classmethod
-    def _validate_bounded_json(cls, value: dict[str, Any], info: ValidationInfo) -> dict[str, Any]:
+    def _validate_bounded_json(
+        cls, value: dict[str, Any] | None, info: ValidationInfo
+    ) -> dict[str, Any] | None:
+        if value is None:
+            return None
         return validate_jsonb_size(value, field_name=str(info.field_name), max_bytes=_JSON_FIELD_MAX_BYTES)
 
     @field_validator("input_schema", "output_schema", "error_schema")
@@ -328,6 +335,7 @@ class ResolvedInstalledAction:
     integration_type_revision_id: UUID | None
     runner_profile_revision_id: UUID | None
     input_schema: Mapping[str, Any]
+    input_presentation: Mapping[str, Any] | None
     output_schema: Mapping[str, Any]
     error_schema: Mapping[str, Any]
     canonical_definition: Mapping[str, Any]
@@ -444,6 +452,7 @@ class PluginRegistryService:
                     ),
                     runner_profile_revision_id=action.runner_profile_revision_id,
                     input_schema=action.input_schema,
+                    input_presentation=action.input_presentation,
                     output_schema=action.output_schema,
                     error_schema=action.error_schema,
                     canonical_definition=action.canonical_definition,
@@ -643,6 +652,7 @@ def _resolved_action(
         integration_type_revision_id=action.integration_type_revision_id,
         runner_profile_revision_id=action.runner_profile_revision_id,
         input_schema=action.input_schema,
+        input_presentation=action.input_presentation,
         output_schema=action.output_schema,
         error_schema=action.error_schema,
         canonical_definition=deepcopy(action.canonical_definition),

@@ -318,6 +318,7 @@ class InstalledPluginAction(BaseResource, table=True):
         description="Exact server-owned profile revision for a platform-runner action.",
     )
     input_schema: dict[str, Any] = Field(sa_type=JSONB)
+    input_presentation: dict[str, Any] | None = Field(default=None, sa_type=JSONB)
     output_schema: dict[str, Any] = Field(sa_type=JSONB)
     error_schema: dict[str, Any] = Field(sa_type=JSONB)
     canonical_definition: dict[str, Any] = Field(sa_type=JSONB)

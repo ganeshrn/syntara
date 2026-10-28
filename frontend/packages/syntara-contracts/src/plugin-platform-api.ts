@@ -750,6 +750,10 @@ export interface components {
       input_schema: {
         [key: string]: unknown
       }
+      /** Input Presentation */
+      input_presentation?: {
+        [key: string]: unknown
+      } | null
       /** Output Schema */
       output_schema: {
         [key: string]: unknown

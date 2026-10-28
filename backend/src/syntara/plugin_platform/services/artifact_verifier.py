@@ -44,6 +44,7 @@ _ASCII_PRINTABLE_MIN = 32
 _ASCII_DELETE = 127
 _SCHEMA_SOURCE_FIELDS = frozenset({"configuration", "credentialSchema", "error", "input", "output"})
 _HTTP_MAPPING_SOURCE_FIELDS = frozenset({"runtime/operation/requestMap", "runtime/operation/responseMap"})
+_INPUT_PRESENTATION_SOURCE_FIELDS = frozenset({"inputPresentation/uiSchema"})
 
 
 @dataclass(frozen=True)
@@ -418,7 +419,7 @@ def _reference_media_type(path: str, field: str) -> str:
     """Return the exact media type allowed for one typed asset field."""
     if field in _SCHEMA_SOURCE_FIELDS:
         prefix = "application/schema+"
-    elif field in _HTTP_MAPPING_SOURCE_FIELDS:
+    elif field in _HTTP_MAPPING_SOURCE_FIELDS or field in _INPUT_PRESENTATION_SOURCE_FIELDS:
         prefix = "application/"
     else:
         _fail("asset-reference")
@@ -438,6 +439,9 @@ def _target_document_value(target: Mapping[str, Any], field: str) -> object:
         runtime = _mapping(target.get("runtime"), "asset-reference")
         operation = _mapping(runtime.get("operation"), "asset-reference")
         return operation.get(field.rsplit("/", maxsplit=1)[-1])
+    if field in _INPUT_PRESENTATION_SOURCE_FIELDS:
+        presentation = _mapping(target.get("inputPresentation"), "asset-reference")
+        return presentation.get("uiSchema")
     _fail("asset-reference")
     raise AssertionError
 

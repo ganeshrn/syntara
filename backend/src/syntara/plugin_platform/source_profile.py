@@ -15,7 +15,11 @@ CatalogSourceMode = Literal["standard", "local-poc"]
 
 STANDARD_CATALOG_SOURCE_MODE: CatalogSourceMode = "standard"
 LOCAL_POC_CATALOG_SOURCE_MODE: CatalogSourceMode = "local-poc"
-LOCAL_POC_REGISTRY_ORIGINS = frozenset({"http://localhost:8443", "http://127.0.0.1:8443"})
+LOCAL_POC_REGISTRY_ORIGINS = frozenset({
+    "http://localhost:8443",
+    "http://127.0.0.1:8443",
+    "http://host.containers.internal:8443",
+})
 LOCAL_POC_ANONYMOUS_CREDENTIAL_REF = "development/local-poc-anonymous"
 LOCAL_POC_UNSIGNED_TRUST_POLICY_REF = "development/local-poc-unsigned"
 

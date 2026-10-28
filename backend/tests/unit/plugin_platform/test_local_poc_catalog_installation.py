@@ -14,11 +14,33 @@ from syntara.plugin_platform.services.registry_access import CatalogRegistryAuth
 
 
 @pytest.mark.asyncio
-async def test_local_poc_rejects_publisher_workload_image_admission() -> None:
-    """Anonymous local metadata access must not become workload-image admission."""
+async def test_local_poc_admits_immutable_local_publisher_workload_image() -> None:
+    """The demo may install a digest-pinned image from its fixed local registry."""
     evaluator = LocalPocWorkloadImageAdmissionEvaluator()
 
-    with pytest.raises(CatalogSourceConfigurationError, match="does not admit publisher workload images"):
+    decision = await evaluator.evaluate_workload_image(
+        WorkloadImageAdmissionRequest(
+            source_id="local-quay",
+            registry_origin="http://localhost:8443",
+            artifact_repository="syntara-admin/plugins/example",
+            artifact_digest="sha256:" + "a" * 64,
+            namespace="syntara",
+            name="example",
+            version="0.1.0",
+            image_digest="localhost:8443/syntara/example@sha256:" + "b" * 64,
+            runtime_abi="syntara.container/v1alpha1",
+            trust_policy_ref="development/local-poc-unsigned",
+            mirror_policy="direct",
+        )
+    )
+    assert decision.summary["imageDigestPinned"] is True
+
+
+@pytest.mark.asyncio
+async def test_local_poc_rejects_non_digest_workload_image() -> None:
+    evaluator = LocalPocWorkloadImageAdmissionEvaluator()
+
+    with pytest.raises(CatalogSourceConfigurationError, match="immutable sha256 digest"):
         await evaluator.evaluate_workload_image(
             WorkloadImageAdmissionRequest(
                 source_id="local-quay",
@@ -28,7 +50,7 @@ async def test_local_poc_rejects_publisher_workload_image_admission() -> None:
                 namespace="syntara",
                 name="example",
                 version="0.1.0",
-                image_digest="localhost:8443/syntara/example@sha256:" + "b" * 64,
+                image_digest="localhost:8443/syntara/example:latest",
                 runtime_abi="syntara.container/v1alpha1",
                 trust_policy_ref="development/local-poc-unsigned",
                 mirror_policy="direct",

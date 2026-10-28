@@ -292,6 +292,7 @@ class InstalledPluginActionRead(SQLModel):
     image_digest: str
     integration_type_revision_id: UUID | None = None
     input_schema: dict[str, object]
+    input_presentation: dict[str, object] | None = None
     output_schema: dict[str, object]
     error_schema: dict[str, object]
 

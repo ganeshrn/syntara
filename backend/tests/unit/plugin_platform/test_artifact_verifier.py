@@ -68,6 +68,7 @@ def _artifact(
     http_operation: bool = False,
     connection_types: bool = False,
     mapping_media_type: str = "application/yaml",
+    input_presentation: bool = False,
 ) -> PluginArtifactInput:
     schema = b'{"properties":{"title":{"type":"string"}},"type":"object"}'
     schema_digest = _digest(schema)
@@ -135,6 +136,21 @@ def _artifact(
         ],
         "workloads": workloads,
     }
+    if input_presentation:
+        ui_schema = {"title": {"ui:autofocus": True}, "ui:order": ["title", "*"]}
+        ui_schema_content = _canonical_json(ui_schema)
+        assets["ui/create-issue.yaml"] = {
+            "canonicalDigest": _digest(ui_schema_content),
+            "digest": _digest(ui_schema_content),
+            "mediaType": "application/yaml",
+            "references": ["steps/create-issue/manifest.yaml#/spec/inputPresentation/uiSchema"],
+            "size": len(ui_schema_content),
+        }
+        entries["ui/create-issue.yaml"] = ui_schema_content
+        specification["targets"][0]["inputPresentation"] = {
+            "renderer": "rjsf.v1",
+            "uiSchema": ui_schema,
+        }
     if connection_types:
         integration_schema = b'{"additionalProperties":false,"type":"object"}'
         credential_schema = b'{"additionalProperties":false,"properties":{"token":{"type":"string"}},"type":"object"}'
@@ -260,6 +276,14 @@ def test_verifier_accepts_a_typed_http_operation_mapping_asset() -> None:
     verified = PluginArtifactVerifier().verify(_artifact(http_operation=True))
 
     assert verified.asset_index["mappings/create-issue.request.yaml"]["mediaType"] == "application/yaml"
+
+
+def test_verifier_accepts_an_input_presentation_ui_schema_asset() -> None:
+    verified = PluginArtifactVerifier().verify(_artifact(input_presentation=True))
+
+    target = verified.canonical_descriptor["spec"]["targets"][0]
+    assert target["inputPresentation"]["renderer"] == "rjsf.v1"
+    assert verified.asset_index["ui/create-issue.yaml"]["mediaType"] == "application/yaml"
 
 
 def test_verifier_accepts_schema_assets_for_connection_and_credential_types() -> None:

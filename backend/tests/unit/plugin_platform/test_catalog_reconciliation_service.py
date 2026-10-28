@@ -104,6 +104,18 @@ def test_initial_index_in_source_scope_is_accepted() -> None:
     assert decision.entries[0]["artifactRepository"] == "syntara/plugins/github"
 
 
+def test_current_sdk_custom_runner_ownership_is_accepted() -> None:
+    decision = plan_catalog_reconciliation(
+        _source(),
+        _artifact(entries=[_entry(runtimeOwnerships=["custom-runner"])]),
+        None,
+        observed_at=_OBSERVED_AT,
+    )
+
+    assert decision.state == "accepted"
+    assert decision.entries[0]["runtimeOwnerships"] == ["custom-runner"]
+
+
 def test_expired_index_is_recorded_as_stale_without_replacing_active_projection() -> None:
     source = _source()
     decision = plan_catalog_reconciliation(

@@ -143,6 +143,10 @@ def plugin_artifact_wire(
                 {
                     "identity": "syntara.github.create-issue",
                     "input": {"properties": {"title": {"type": "string"}}, "type": "object"},
+                    "inputPresentation": {
+                        "renderer": "rjsf.v1",
+                        "uiSchema": {"title": {"ui:autofocus": True}},
+                    },
                     "kind": "Action",
                     "metadata": {
                         "description": "Creates one issue.",

@@ -194,7 +194,9 @@ class CatalogReconciliationService:
                             artifact_repository=entry["artifactRepository"],
                             artifact_digest=entry["artifactDigest"],
                             documentation_digest=entry["documentationDigest"],
-                            runtime_ownerships=entry["runtimeOwnerships"],
+                            runtime_ownerships=_runtime_ownerships_for_storage(
+                                entry["runtimeOwnerships"]
+                            ),
                             deprecated=entry.get("deprecated", False),
                             withdrawn=entry.get("withdrawn", False),
                             canonical_entry=validate_jsonb_size(
@@ -375,7 +377,10 @@ def _catalog_entry(value: object) -> dict[str, Any]:
         or not isinstance(ownerships, list)
         or not ownerships
         or len(ownerships) != len(set(ownerships))
-        or any(ownership not in {"platform-runner", "custom-workload"} for ownership in ownerships)
+        or any(
+            ownership not in {"platform-runner", "custom-runner", "custom-workload"}
+            for ownership in ownerships
+        )
     ):
         msg = "Trusted catalog index entry has invalid required fields"
         raise CatalogSourceConfigurationError(msg)
@@ -383,6 +388,17 @@ def _catalog_entry(value: object) -> dict[str, Any]:
         msg = "Trusted catalog index entry has invalid lifecycle flags"
         raise CatalogSourceConfigurationError(msg)
     return entry
+
+
+def _runtime_ownerships_for_storage(ownerships: list[str]) -> list[str]:
+    """Translate the published SDK term to Syntara's existing internal value.
+
+    The catalog contract calls publisher-owned execution ``custom-runner``.
+    Syntara's current database and execution-facing models predate that term and
+    store the equivalent value as ``custom-workload``. Keep the published
+    catalog entry unchanged as evidence while normalizing only the projection.
+    """
+    return ["custom-workload" if value == "custom-runner" else value for value in ownerships]
 
 
 def _require_active_reconciliation(reconciliation: PluginSourceReconciliation) -> None:

@@ -31,44 +31,70 @@ function asInstalledDetail(response: { data?: InstalledPluginDetail; error?: unk
   return response.data
 }
 
-type InstalledActionOption = Readonly<{
-  action: InstalledPluginAction
-  pluginDisplayName: string
-}>
-
-function makeNodeDefinition({
+function submitInstalledAction({
   action,
   pluginDisplayName,
-}: InstalledActionOption): NodeTypeDefinition<ExternalActionFormData> {
+  data,
+  onSuccess,
+  onError,
+}: Readonly<{
+  action: InstalledPluginAction
+  pluginDisplayName: string
+  data: ExternalActionFormData
+  onSuccess: (newNodeId?: string) => void
+  onError: (error: string) => void
+}>): void {
+  try {
+    const { activityId, activity } = buildNamedActivity(
+      `${pluginDisplayName} ${action.display_name}`,
+      data.name,
+      (id, name) =>
+        createExternalActionActivity({
+          id,
+          name,
+          stepRevisionId: action.step_revision_id,
+          inputs: data.inputs,
+          pluginIntegrationId: data.pluginIntegrationId,
+        })
+    )
+    useWorkflowStore.getState().addActivity(activity)
+    onSuccess(activityId)
+  } catch (error) {
+    onError(error instanceof Error ? error.message : 'Failed to add installed plugin action')
+  }
+}
+
+function makeNodeDefinition(
+  plugin: InstalledPluginDetail,
+  actions: readonly InstalledPluginAction[]
+): NodeTypeDefinition<ExternalActionFormData> {
+  const pluginId = `installed-plugin:${plugin.id}`
   return {
-    id: nodeIdFor(action),
-    label: `${pluginDisplayName} · ${action.display_name}`,
+    id: pluginId,
+    label: plugin.display_name,
     icon: RhUiPlugFillIcon,
     category: 'action',
-    description: action.description,
-    keywords: [action.qualified_name, 'plugin', 'installed'],
+    description: plugin.description,
+    keywords: [plugin.namespace, plugin.name, 'plugin', 'installed'],
     order: 35,
     formComponent: ExternalActionNodeForm,
-    formProps: { action },
-    onSubmit: (data, onSuccess, onError) => {
-      try {
-        const { activityId, activity } = buildNamedActivity(
-          `${pluginDisplayName} ${action.display_name}`,
-          data.name,
-          (id, name) =>
-            createExternalActionActivity({
-              id,
-              name,
-              stepRevisionId: action.step_revision_id,
-              inputs: data.inputs,
-              pluginIntegrationId: data.pluginIntegrationId,
-            })
-        )
-        useWorkflowStore.getState().addActivity(activity)
-        onSuccess(activityId)
-      } catch (error) {
-        onError(error instanceof Error ? error.message : 'Failed to add installed plugin action')
+    selectionTitle: `Select a step from ${plugin.display_name}`,
+    subtypes: actions.map((action) => ({
+      id: nodeIdFor(action),
+      label: action.display_name,
+      icon: RhUiPlugFillIcon,
+      description: action.description,
+      keywords: [action.qualified_name, 'step type', 'installed'],
+      formComponent: ExternalActionNodeForm,
+      formProps: { action },
+    })),
+    onSubmit: (data, onSuccess, onError, subtypeId) => {
+      const action = actions.find((candidate) => nodeIdFor(candidate) === subtypeId)
+      if (!action) {
+        onError('Select a step type from the installed plugin.')
+        return
       }
+      submitInstalledAction({ action, pluginDisplayName: plugin.display_name, data, onSuccess, onError })
     },
   }
 }
@@ -100,19 +126,13 @@ export function useInstalledActionNodes(): readonly NodeTypeDefinition<ExternalA
   const detailKey = details
     .map((detail) => detail.data?.actions.map((action) => action.step_revision_id).join(',') ?? '')
     .join('|')
-  const actions = useMemo<readonly InstalledActionOption[]>(
-    () =>
-      details.flatMap((detail) => {
-        const plugin = detail.data
-        if (!plugin?.enabled) return []
-        return plugin.actions.map((action) => ({ action, pluginDisplayName: plugin.display_name }))
-      }),
-    // `useQueries` returns a new wrapper array each render. The revision IDs are
-    // immutable, so this stable key avoids re-registering nodes in a render loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [detailKey]
-  )
-  const definitions = useMemo(() => actions.map((action) => makeNodeDefinition(action)), [actions])
+  const definitions = useMemo(() => {
+    return details.flatMap((detail) => {
+      const plugin = detail.data
+      if (!plugin?.enabled || plugin.actions.length === 0) return []
+      return [makeNodeDefinition(plugin, plugin.actions)]
+    })
+  }, [detailKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const nodeIds = definitions.map((definition) => definition.id)

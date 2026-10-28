@@ -19,6 +19,7 @@ import httpx
 
 from syntara.core.lib.url_validation import validate_host_url
 from syntara.plugin_platform.exceptions import CatalogRegistryClientError
+from syntara.plugin_platform.source_profile import LOCAL_POC_REGISTRY_ORIGINS
 
 if TYPE_CHECKING:
     import ssl
@@ -38,6 +39,11 @@ _SERVER_ERROR_MINIMUM_STATUS = 500
 _RETRYABLE_STATUS_CODES = frozenset({408, 429})
 
 
+def _validate_registry_origin(value: str) -> str:
+    """Validate an OCI origin, allowing HTTP only for the fixed local-PoC origins."""
+    return validate_host_url(value, allow_http=value in LOCAL_POC_REGISTRY_ORIGINS)
+
+
 @dataclass(frozen=True)
 class CatalogIndexLocator:
     """The validated, non-secret route to one configured catalog index."""
@@ -48,7 +54,7 @@ class CatalogIndexLocator:
 
     def __post_init__(self) -> None:
         """Reject path injection and normalize the origin before any request is built."""
-        object.__setattr__(self, "registry_origin", validate_host_url(self.registry_origin))
+        object.__setattr__(self, "registry_origin", _validate_registry_origin(self.registry_origin))
         if _REPOSITORY_PATTERN.fullmatch(self.index_repository) is None or any(
             part in {".", ".."} for part in self.index_repository.split("/")
         ):
@@ -78,7 +84,7 @@ class PluginArtifactLocator:
 
     def __post_init__(self) -> None:
         """Reject path injection and normalize the origin before any request is built."""
-        object.__setattr__(self, "registry_origin", validate_host_url(self.registry_origin))
+        object.__setattr__(self, "registry_origin", _validate_registry_origin(self.registry_origin))
         if _REPOSITORY_PATTERN.fullmatch(self.artifact_repository) is None or any(
             part in {".", ".."} for part in self.artifact_repository.split("/")
         ):

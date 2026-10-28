@@ -9,18 +9,18 @@ import {
   type MenuToggleElement,
   SelectList,
   SelectOption,
-  TextArea,
   TextInput,
 } from '@patternfly/react-core'
+import type { RJSFSchema, UiSchema } from '@rjsf/utils'
 import type { PluginPlatformAPI } from '@syntara/contracts'
 import { useState, type FormEvent, type Ref } from 'react'
 
 import { pluginPlatformClient } from '../../../client'
 import { SynSelect } from '../../../components/SynSelect'
-import { parseJsonSchema } from '../../../utils/jsonSafeParse'
 import { validateJsonSchemaObject } from '../../../utils/jsonSchemaValidation'
 
 import { NodeFormContainer } from './shared/NodeFormContainer'
+import { SchemaInputFields } from './shared/SchemaInputFields'
 
 export type InstalledPluginAction = PluginPlatformAPI.components['schemas']['InstalledPluginActionRead']
 
@@ -121,16 +121,23 @@ function PluginIntegrationSelector({
   )
 }
 
-/**
- * A deliberately small, generic authoring form for an installed action.
- *
- * Dynamic field renderers are intentionally deferred. This v1 form accepts a
- * bounded JSON object and stores only author-provided inputs. The server still
- * validates the action revision and pins its route at publication time.
- */
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isRjsfSchema(value: unknown): value is RJSFSchema {
+  return isObject(value)
+}
+
+function inputUiSchema(action: InstalledPluginAction): UiSchema | undefined {
+  const presentation = action.input_presentation
+  if (!isObject(presentation) || presentation.renderer !== 'rjsf.v1') return undefined
+  return isObject(presentation.uiSchema) ? presentation.uiSchema : undefined
+}
+
 export function ExternalActionNodeForm({ action, initialData, onSubmit, projectId }: ExternalActionNodeFormProps) {
   const [name, setName] = useState(initialData?.name ?? action?.display_name ?? '')
-  const [inputsJson, setInputsJson] = useState(() => JSON.stringify(initialData?.inputs ?? {}, null, 2))
+  const [inputs, setInputs] = useState<Record<string, unknown>>(initialData?.inputs ?? {})
   const [pluginIntegrationId, setPluginIntegrationId] = useState(initialData?.pluginIntegrationId)
   const [error, setError] = useState<string | undefined>()
 
@@ -138,11 +145,6 @@ export function ExternalActionNodeForm({ action, initialData, onSubmit, projectI
     event.preventDefault()
     if (!action) {
       setError('The installed action definition is unavailable.')
-      return
-    }
-    const inputs = parseJsonSchema(inputsJson)
-    if (!inputs) {
-      setError('Inputs must be a JSON object.')
       return
     }
     if (!name.trim()) {
@@ -197,28 +199,24 @@ export function ExternalActionNodeForm({ action, initialData, onSubmit, projectI
           }}
         />
       ) : null}
-      <FormGroup label="Inputs (JSON)" fieldId="external-action-inputs">
-        <TextArea
-          id="external-action-inputs"
-          aria-label="Inputs (JSON)"
-          value={inputsJson}
-          onChange={(_event, value) => {
-            setInputsJson(value)
+      {isRjsfSchema(action.input_schema) ? (
+        <SchemaInputFields
+          schema={action.input_schema}
+          uiSchema={inputUiSchema(action)}
+          value={inputs}
+          onChange={(value) => {
+            setInputs(value)
             setError(undefined)
           }}
-          validated={error ? 'error' : 'default'}
-          resizeOrientation="vertical"
-          rows={12}
         />
+      ) : null}
+      {error ? (
         <FormHelperText>
           <HelperText>
-            <HelperTextItem variant={error ? 'error' : 'default'}>
-              {error ??
-                'Use a JSON object matching the action input contract. Syntara verifies the complete contract when you publish.'}
-            </HelperTextItem>
+            <HelperTextItem variant="error">{error}</HelperTextItem>
           </HelperText>
         </FormHelperText>
-      </FormGroup>
+      ) : null}
     </NodeFormContainer>
   )
 }

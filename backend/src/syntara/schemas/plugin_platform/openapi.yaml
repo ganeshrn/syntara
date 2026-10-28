@@ -1680,6 +1680,12 @@ components:
           type: object
           additionalProperties: true
           title: Input Schema
+        input_presentation:
+          anyOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+          title: Input Presentation
         output_schema:
           type: object
           additionalProperties: true

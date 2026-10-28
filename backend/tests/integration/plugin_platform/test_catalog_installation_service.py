@@ -181,6 +181,10 @@ async def test_catalog_install_admits_artifact_and_workload_before_persisting_ac
     assert result.registry_generation == 1
     assert plugin.artifact_digest == wire.manifest_digest
     assert action.image_digest == "quay.io/syntara/github@sha256:" + "b" * 64
+    assert action.input_presentation == {
+        "renderer": "rjsf.v1",
+        "uiSchema": {"title": {"ui:autofocus": True}},
+    }
     assert action.step_revision_id.startswith("syntara.github.create-issue:")
     assert len(workload_admission.requests) == 1
     assert workload_admission.requests[0].image_digest == action.image_digest

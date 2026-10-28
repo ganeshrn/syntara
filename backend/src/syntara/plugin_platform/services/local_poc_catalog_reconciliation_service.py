@@ -11,6 +11,7 @@ workload images or execute workloads.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from syntara.plugin_platform.exceptions import CatalogSourceConfigurationError
@@ -35,10 +36,13 @@ from syntara.plugin_platform.services.plugin_artifact_trust import (
 )
 from syntara.plugin_platform.services.runner_profile import DatabasePlatformRunnerProfileResolver
 from syntara.plugin_platform.source_profile import (
+    LOCAL_POC_REGISTRY_ORIGINS,
     validate_local_poc_catalog_trust,
     validate_local_poc_plugin_artifact_trust,
     validate_local_poc_registry_access,
 )
+
+_LOCAL_IMAGE_REFERENCE = re.compile(r"^([a-z0-9.-]+:\d{2,5})/[a-z0-9][a-z0-9._/-]*@(sha256:[a-f0-9]{64})$")
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -121,19 +125,34 @@ class LocalPocPluginArtifactTrustEvaluator:
 
 
 class LocalPocWorkloadImageAdmissionEvaluator:
-    """Reject publisher workloads in the local catalog demonstration.
+    """Admit only immutable images from the fixed local development registry."""
 
-    The local-PoC exception is intentionally limited to unsigned metadata
-    artifacts and the platform-owned runner route.  Publisher workload images
-    require their own image-admission and execution-pool implementation; this
-    adapter prevents a future call site from treating anonymous loopback
-    access as workload admission.
-    """
-
-    async def evaluate_workload_image(self, _request: WorkloadImageAdmissionRequest) -> WorkloadImageAdmissionDecision:
-        """Fail closed because local-PoC does not admit publisher workloads."""
-        msg = "Local-PoC catalog installation does not admit publisher workload images"
-        raise CatalogSourceConfigurationError(msg)
+    async def evaluate_workload_image(self, request: WorkloadImageAdmissionRequest) -> WorkloadImageAdmissionDecision:
+        """Allow the demo workload without turning local anonymous access into production admission."""
+        if request.registry_origin not in LOCAL_POC_REGISTRY_ORIGINS:
+            msg = "Local-PoC workload admission requires the configured local registry"
+            raise CatalogSourceConfigurationError(msg)
+        image_match = _LOCAL_IMAGE_REFERENCE.fullmatch(request.image_digest)
+        if image_match is None:
+            msg = "Local-PoC workload images must use an immutable sha256 digest"
+            raise CatalogSourceConfigurationError(msg)
+        image_origin = f"http://{image_match.group(1)}"
+        if image_origin not in LOCAL_POC_REGISTRY_ORIGINS:
+            msg = "Local-PoC workload image must come from the configured local registry"
+            raise CatalogSourceConfigurationError(msg)
+        if request.runtime_abi != "syntara.container/v1alpha1":
+            msg = "Local-PoC workload ABI is not supported"
+            raise CatalogSourceConfigurationError(msg)
+        return WorkloadImageAdmissionDecision(
+            summary={
+                "profile": "local-poc",
+                "operation": "workload-install",
+                "registryTransport": "loopback-http",
+                "imageDigestPinned": True,
+                "signatureVerification": "skipped",
+                "unsafeDevelopmentMode": True,
+            }
+        )
 
 
 class LocalPocCatalogReconciliationService:
