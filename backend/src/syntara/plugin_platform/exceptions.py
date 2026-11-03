@@ -30,11 +30,12 @@ class CatalogIndexArtifactVerificationError(PluginRegistryError):
 class CatalogRegistryClientError(PluginRegistryError):
     """A safe OCI Distribution catalog-request failure."""
 
-    def __init__(self, code: str, *, retryable: bool) -> None:
+    def __init__(self, code: str, *, retryable: bool, status_code: int | None = None) -> None:
         """Preserve only a stable classification, never upstream content or credentials."""
         super().__init__(f"Catalog registry request failed: {code}")
         self.code = code
         self.retryable = retryable
+        self.status_code = status_code
 
 
 class CatalogIndexTrustError(PluginRegistryError):

@@ -4454,7 +4454,7 @@ requires-dist = [
     { name = "sqlmodel", specifier = ">=0.0.14,<0.0.28" },
     { name = "structlog", specifier = ">=25.5.0,<26.0.0" },
     { name = "syntara-api-client", marker = "extra == 'dev'", editable = "src/api_client" },
-    { name = "syntara-plugin-contracts", editable = "../../syntara-plugin-sdk/sdks/python/packages/contracts" },
+    { name = "syntara-plugin-contracts", specifier = "==0.1.0a3" },
     { name = "temporalio", specifier = ">=1.5.0" },
     { name = "testcontainers", extras = ["postgres", "redis"], marker = "extra == 'dev'", specifier = ">=4.14.0" },
     { name = "tiktoken", specifier = ">=0.5.0" },
@@ -4502,23 +4502,15 @@ requires-dist = [
 
 [[package]]
 name = "syntara-plugin-contracts"
-version = "0.1.0a1"
-source = { editable = "../../syntara-plugin-sdk/sdks/python/packages/contracts" }
+version = "0.1.0a3"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "grpcio" },
     { name = "jsonschema" },
     { name = "protobuf" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "referencing" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "grpcio", specifier = ">=1.78.0" },
-    { name = "jsonschema", specifier = ">=4.23" },
-    { name = "protobuf", specifier = ">=6.31.1" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "referencing", specifier = ">=0.37" },
 ]
 
 [[package]]

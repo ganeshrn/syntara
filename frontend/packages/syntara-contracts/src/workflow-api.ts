@@ -1010,6 +1010,7 @@ export interface components {
         | components['schemas']['AAPJobTemplateNode']
         | components['schemas']['AAPWorkflowJobTemplateNode']
         | components['schemas']['HTTPRequestNode']
+        | components['schemas']['ExternalActionNode']
         | components['schemas']['AgenticNode']
         | components['schemas']['ScriptNode']
         | components['schemas']['ApprovalNode']
@@ -1140,6 +1141,45 @@ export interface components {
        */
       type: 'http_request'
       parameters: components['schemas']['APIExecutorParameters']
+      settings?: components['schemas']['NodeSettingsFull'] | null
+    } & {
+      [key: string]: unknown
+    }
+    /**
+     * ExternalActionNode
+     * @description One installed plugin action, pinned when its workflow revision publishes.
+     */
+    ExternalActionNode: {
+      /**
+       * Id
+       * @description Unique identifier for the node within the workflow
+       */
+      id: string
+      /**
+       * Name
+       * @description Human-readable name for the node
+       */
+      name?: string | null
+      /**
+       * Description
+       * @description Human-readable description of the node purpose
+       */
+      description?: string | null
+      /**
+       * Outputs
+       * @description Output extraction mapping
+       */
+      outputs?: {
+        [key: string]: string
+      } | null
+      /** @description Optional UI position hint */
+      position?: components['schemas']['NodePosition'] | null
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: 'external_action'
+      parameters: components['schemas']['ExternalActionParameters']
       settings?: components['schemas']['NodeSettingsFull'] | null
     } & {
       [key: string]: unknown
@@ -1693,6 +1733,54 @@ export interface components {
        * @description Syntara credential UUID for authentication or Secret URL.
        */
       credential_id?: string | null
+    }
+    /**
+     * ExternalActionParameters
+     * @description A generic installed plugin action selected by immutable revision.
+     *
+     *     The workflow stores only the installed action revision, an optional project
+     *     connection identity, and structured inputs. Publication resolves and pins
+     *     the image and runtime route in a separate durable binding; workflow authors
+     *     cannot provide an image, command, policy, grant, or credential here.
+     */
+    ExternalActionParameters: {
+      /**
+       * Step Revision Id
+       * @description Installed plugin action revision selected for this workflow step.
+       */
+      step_revision_id: string
+      /**
+       * Plugin Connection Id
+       * @description Optional project-scoped plugin connection identity.
+       */
+      plugin_connection_id?: string | null
+      /**
+       * Runtime Binding Digest
+       * @description Admitted immutable RuntimeBinding selected for this action.
+       */
+      runtime_binding_digest?: string | null
+      /**
+       * Binding Index Digest
+       * @description Signed binding-index snapshot that authorized the selection.
+       */
+      binding_index_digest?: string | null
+      /**
+       * Workload Id
+       * @description Logical workload declared by the selected step.
+       */
+      workload_id?: string | null
+      /**
+       * Workload Option
+       * @description Stable image option selected from the admitted binding.
+       */
+      workload_option?: string | null
+      /**
+       * Inputs
+       * @description Structured action inputs.
+       */
+      inputs?: {
+        [key: string]: unknown
+      }
     }
     /**
      * AgenticExecutorParameters

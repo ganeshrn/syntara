@@ -117,19 +117,34 @@ export type CreateExternalActionActivityOptions = {
   stepRevisionId: string
   inputs?: Record<string, unknown>
   pluginIntegrationId?: string
+  runtimeBindingDigest?: string
+  bindingIndexDigest?: string
+  workloadId?: string
+  workloadOption?: string
   settings?: NodeSettings
 }
 
 /**
  * Create a workflow step backed by an administrator-installed plugin action.
  *
- * Deliberately store only the immutable action revision, user inputs, and an
- * optional project integration identity. The backend resolves every runnable
- * detail from trusted installed state during publication; browser code never
- * carries an image, command, or credential.
+ * Store the immutable action revision, user inputs, optional project integration
+ * identity, and an optional approved binding/option identity. The backend
+ * resolves the selected option to an exact image digest during publication;
+ * browser code never carries an image reference, command, or credential.
  */
 export function createExternalActionActivity(options: CreateExternalActionActivityOptions): Activity {
-  const { id, name, stepRevisionId, inputs = {}, pluginIntegrationId, settings } = options
+  const {
+    id,
+    name,
+    stepRevisionId,
+    inputs = {},
+    pluginIntegrationId,
+    runtimeBindingDigest,
+    bindingIndexDigest,
+    workloadId,
+    workloadOption,
+    settings,
+  } = options
   return {
     id,
     type: ActivityTypeEnum.EXTERNAL_ACTION,
@@ -138,6 +153,14 @@ export function createExternalActionActivity(options: CreateExternalActionActivi
       step_revision_id: stepRevisionId,
       inputs,
       ...(pluginIntegrationId ? { plugin_connection_id: pluginIntegrationId } : {}),
+      ...(runtimeBindingDigest && bindingIndexDigest && workloadId && workloadOption
+        ? {
+            runtime_binding_digest: runtimeBindingDigest,
+            binding_index_digest: bindingIndexDigest,
+            workload_id: workloadId,
+            workload_option: workloadOption,
+          }
+        : {}),
     },
     ...(settings && { settings }),
   }

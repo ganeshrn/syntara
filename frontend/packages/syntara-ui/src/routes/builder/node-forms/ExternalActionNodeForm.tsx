@@ -23,11 +23,16 @@ import { NodeFormContainer } from './shared/NodeFormContainer'
 import { SchemaInputFields } from './shared/SchemaInputFields'
 
 export type InstalledPluginAction = PluginPlatformAPI.components['schemas']['InstalledPluginActionRead']
+type InstalledRuntimeBinding = NonNullable<InstalledPluginAction['runtime_bindings']>[number]
 
 export type ExternalActionFormData = {
   name: string
   inputs: Record<string, unknown>
   pluginIntegrationId?: string
+  runtimeBindingDigest?: string
+  bindingIndexDigest?: string
+  workloadId?: string
+  workloadOption?: string
 }
 
 type ExternalActionNodeFormProps = {
@@ -121,6 +126,63 @@ function PluginIntegrationSelector({
   )
 }
 
+function RuntimeImageSelector({
+  binding,
+  value,
+  onChange,
+}: Readonly<{
+  binding: InstalledRuntimeBinding
+  value?: string
+  onChange: (optionName: string) => void
+}>) {
+  const [isOpen, setIsOpen] = useState(false)
+  const options = binding.options
+  const selectedOption = options.find((option) => option.name === value)
+
+  return (
+    <FormGroup label="Runtime image" fieldId="external-action-runtime-image" isRequired={options.length > 1}>
+      <SynSelect
+        id="external-action-runtime-image"
+        isOpen={isOpen}
+        selected={selectedOption?.name}
+        onSelect={(_event, selected) => {
+          onChange(String(selected))
+          setIsOpen(false)
+        }}
+        onOpenChange={setIsOpen}
+        toggle={(toggleRef: Ref<MenuToggleElement>) => (
+          <MenuToggle
+            ref={toggleRef}
+            onClick={() => setIsOpen((current) => !current)}
+            isExpanded={isOpen}
+            isFullWidth
+            isPlaceholder={!selectedOption}
+            aria-label="Runtime image"
+          >
+            {selectedOption?.display_name ?? 'Select a runtime image'}
+          </MenuToggle>
+        )}
+      >
+        <SelectList>
+          {options.map((option) => (
+            <SelectOption key={option.name} value={option.name} isSelected={option.name === selectedOption?.name}>
+              <div>{option.display_name}</div>
+              {option.description ? <Content component={ContentVariants.small}>{option.description}</Content> : null}
+            </SelectOption>
+          ))}
+        </SelectList>
+      </SynSelect>
+      <FormHelperText>
+        <HelperText>
+          <HelperTextItem variant="default">
+            Syntara resolves this available option to its immutable image digest when the workflow is published.
+          </HelperTextItem>
+        </HelperText>
+      </FormHelperText>
+    </FormGroup>
+  )
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -139,6 +201,10 @@ export function ExternalActionNodeForm({ action, initialData, onSubmit, projectI
   const [name, setName] = useState(initialData?.name ?? action?.display_name ?? '')
   const [inputs, setInputs] = useState<Record<string, unknown>>(initialData?.inputs ?? {})
   const [pluginIntegrationId, setPluginIntegrationId] = useState(initialData?.pluginIntegrationId)
+  const runtimeBinding = action?.runtime_bindings?.[0]
+  const defaultOption = runtimeBinding?.options.find((option) => option.name === runtimeBinding.default_option)
+  const [workloadOption, setWorkloadOption] = useState(initialData?.workloadOption)
+  const selectedWorkloadOption = workloadOption ?? defaultOption?.name
   const [error, setError] = useState<string | undefined>()
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -155,6 +221,10 @@ export function ExternalActionNodeForm({ action, initialData, onSubmit, projectI
       setError('Select an integration for this step.')
       return
     }
+    if (runtimeBinding && !runtimeBinding.options.some((option) => option.name === selectedWorkloadOption)) {
+      setError('Select an available runtime image for this step.')
+      return
+    }
     const validationErrors = validateJsonSchemaObject(inputs, action.input_schema)
     if (validationErrors.length > 0) {
       setError(validationErrors[0])
@@ -164,6 +234,14 @@ export function ExternalActionNodeForm({ action, initialData, onSubmit, projectI
       name: name.trim(),
       inputs,
       ...(action.integration_type_revision_id ? { pluginIntegrationId } : {}),
+      ...(runtimeBinding && selectedWorkloadOption
+        ? {
+            runtimeBindingDigest: runtimeBinding.binding_digest,
+            bindingIndexDigest: runtimeBinding.binding_index_digest,
+            workloadId: runtimeBinding.workload_id,
+            workloadOption: selectedWorkloadOption,
+          }
+        : {}),
     })
   }
 
@@ -195,6 +273,16 @@ export function ExternalActionNodeForm({ action, initialData, onSubmit, projectI
           value={pluginIntegrationId}
           onChange={(value) => {
             setPluginIntegrationId(value)
+            setError(undefined)
+          }}
+        />
+      ) : null}
+      {runtimeBinding && runtimeBinding.options.length > 0 ? (
+        <RuntimeImageSelector
+          binding={runtimeBinding}
+          value={selectedWorkloadOption}
+          onChange={(value) => {
+            setWorkloadOption(value)
             setError(undefined)
           }}
         />

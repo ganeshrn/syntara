@@ -13,6 +13,7 @@ from .registry import (
     RunnerProfile,
     RunnerProfileRevision,
 )
+from .runtime_binding import InstalledPluginRuntimeBinding
 from .workflow_action_binding import WorkflowActionBinding
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "InstalledPluginAction",
     "InstalledPluginCredentialType",
     "InstalledPluginIntegrationType",
+    "InstalledPluginRuntimeBinding",
     "PluginConnection",
     "PluginGenerationMember",
     "PluginRegistryGeneration",

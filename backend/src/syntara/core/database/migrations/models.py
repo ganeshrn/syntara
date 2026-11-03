@@ -43,6 +43,7 @@ from syntara.plugin_platform.models.registry import (
     RunnerProfile,
     RunnerProfileRevision,
 )
+from syntara.plugin_platform.models.runtime_binding import InstalledPluginRuntimeBinding
 from syntara.plugin_platform.models.workflow_action_binding import WorkflowActionBinding
 from syntara.service_accounts.models.service_account import ServiceAccount
 from syntara.service_accounts.models.service_account_credential import ServiceAccountCredential

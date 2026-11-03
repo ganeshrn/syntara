@@ -55,6 +55,10 @@ function submitInstalledAction({
           stepRevisionId: action.step_revision_id,
           inputs: data.inputs,
           pluginIntegrationId: data.pluginIntegrationId,
+          runtimeBindingDigest: data.runtimeBindingDigest,
+          bindingIndexDigest: data.bindingIndexDigest,
+          workloadId: data.workloadId,
+          workloadOption: data.workloadOption,
         })
     )
     useWorkflowStore.getState().addActivity(activity)

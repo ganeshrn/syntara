@@ -24,6 +24,7 @@ from syntara.plugin_platform.models.registry import (
     PluginRegistryGeneration,
     PluginRegistryState,
 )
+from syntara.plugin_platform.models.runtime_binding import InstalledPluginRuntimeBinding
 from syntara.plugin_platform.schemas import (
     InstalledPluginActionRead,
     InstalledPluginCredentialTypeRead,
@@ -31,6 +32,8 @@ from syntara.plugin_platform.schemas import (
     InstalledPluginIntegrationTypeRead,
     InstalledPluginListResponse,
     InstalledPluginRead,
+    InstalledPluginRuntimeBindingOptionRead,
+    InstalledPluginRuntimeBindingRead,
 )
 
 if TYPE_CHECKING:
@@ -165,7 +168,7 @@ class InstalledPluginBrowseService(BaseService):
             action_count=len(actions),
             installed_at=plugin.created_at,
             registry_generation=generation.generation,
-            actions=[self._action_read(action) for action in actions],
+            actions=[await self._action_read(action) for action in actions],
             integration_types=[self._integration_type_read(integration) for integration in integration_types],
             credential_types=[self._credential_type_read(credential) for credential in credential_types],
         )
@@ -209,9 +212,15 @@ class InstalledPluginBrowseService(BaseService):
         )
         return dict((await self.session.exec(statement)).all())
 
-    @staticmethod
-    def _action_read(action: InstalledPluginAction) -> InstalledPluginActionRead:
+    async def _action_read(self, action: InstalledPluginAction) -> InstalledPluginActionRead:
         """Build an authoring contract without canonical descriptor internals."""
+        binding_rows = (
+            await self.session.exec(
+                select(InstalledPluginRuntimeBinding)
+                .where(InstalledPluginRuntimeBinding.step_revision_id == action.step_revision_id)
+                .order_by(InstalledPluginRuntimeBinding.binding_index_generation.desc())
+            )
+        ).all()
         return InstalledPluginActionRead(
             target_name=action.target_name,
             qualified_name=action.qualified_name,
@@ -227,6 +236,26 @@ class InstalledPluginBrowseService(BaseService):
             input_presentation=action.input_presentation,
             output_schema=action.output_schema,
             error_schema=action.error_schema,
+            runtime_bindings=[
+                InstalledPluginRuntimeBindingRead(
+                    binding_digest=binding.binding_digest,
+                    binding_index_digest=binding.binding_index_digest,
+                    binding_index_generation=binding.binding_index_generation,
+                    workload_id=binding.workload_id,
+                    default_option=binding.default_option,
+                    options=[
+                        InstalledPluginRuntimeBindingOptionRead(
+                            name=str(option["name"]),
+                            display_name=str(option["displayName"]),
+                            description=(str(option["description"]) if option.get("description") is not None else None),
+                            image_digest=str(option["imageDigest"]),
+                        )
+                        for option in binding.options
+                    ],
+                    verification_summary=binding.verification_summary,
+                )
+                for binding in binding_rows
+            ],
         )
 
     @staticmethod

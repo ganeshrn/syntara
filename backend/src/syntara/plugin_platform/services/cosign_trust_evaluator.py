@@ -40,6 +40,10 @@ from syntara.plugin_platform.services.plugin_artifact_trust import (
     PluginArtifactTrustDecision,
     PluginArtifactTrustRequest,
 )
+from syntara.plugin_platform.services.runtime_binding_trust import (
+    RuntimeBindingTrustDecision,
+    RuntimeBindingTrustRequest,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -276,6 +280,30 @@ class PinnedCosignTrustEvaluator:
         except CosignVerificationError as exc:
             raise PluginArtifactTrustError(exc.code) from exc
         return PluginArtifactTrustDecision(summary=_trust_summary(policy))
+
+    async def evaluate_runtime_binding(self, request: RuntimeBindingTrustRequest) -> RuntimeBindingTrustDecision:
+        """Verify a binding or binding-index digest under the plugin source policy."""
+        policy = self._policy_for(
+            request.trust_policy_ref,
+            registry_origin=request.registry_origin,
+            repository=request.artifact_repository,
+            namespace=request.namespace,
+        )
+        try:
+            await self._runner.verify(
+                CosignVerificationRequest(
+                    image_reference=_image_reference(
+                        request.registry_origin,
+                        request.artifact_repository,
+                        request.artifact_digest,
+                    ),
+                    public_key_pem=policy.public_key_pem,
+                    require_transparency_log=policy.require_transparency_log,
+                )
+            )
+        except CosignVerificationError as exc:
+            raise PluginArtifactTrustError(exc.code) from exc
+        return RuntimeBindingTrustDecision(summary=_trust_summary(policy))
 
     def _policy_for(
         self,

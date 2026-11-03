@@ -127,6 +127,14 @@ class ResolvedPluginArtifactManifest:
     manifest_bytes: bytes
 
 
+@dataclass(frozen=True)
+class ResolvedOciArtifactManifest:
+    """One digest-verified OCI image manifest for a non-plugin artifact kind."""
+
+    digest: str
+    manifest_bytes: bytes
+
+
 class OciDistributionClient:
     """Read configured OCI source artifacts without general registry discovery."""
 
@@ -216,6 +224,46 @@ class OciDistributionClient:
             tls_context=tls_context,
         )
         return ResolvedPluginArtifactManifest(digest=resolved_digest, manifest_bytes=manifest_bytes)
+
+    async def fetch_oci_artifact_manifest(
+        self,
+        locator: OciRepositoryLocator,
+        *,
+        reference: str,
+        authorization_header: str | None = None,
+        tls_context: ssl.SSLContext | None = None,
+    ) -> ResolvedOciArtifactManifest:
+        """Fetch one generic OCI manifest by a bounded tag or immutable digest.
+
+        This method only verifies transport-level digest integrity. The caller
+        must validate the artifact type, subject, config, layers, and trust policy.
+        A mutable tag is immediately re-fetched by the digest returned by the
+        registry so its payload cannot change between identity and inspection.
+        """
+        if not reference or len(reference) > 256 or any(char in reference for char in "?#"):
+            raise ValueError("OCI artifact reference must be a bounded tag or sha256 digest")
+        if _DIGEST_PATTERN.fullmatch(reference) is None and _CHANNEL_PATTERN.fullmatch(reference) is None:
+            raise ValueError("OCI artifact tag is not normalized")
+        resolved_digest, first_manifest = await self._fetch_manifest(
+            locator,
+            reference,
+            authorization_header=authorization_header,
+            tls_context=tls_context,
+        )
+        if _DIGEST_PATTERN.fullmatch(reference) is not None:
+            if reference != resolved_digest:
+                _fail("pinned-manifest-digest", retryable=False)
+            manifest_bytes = first_manifest
+        else:
+            pinned_digest, manifest_bytes = await self._fetch_manifest(
+                locator,
+                resolved_digest,
+                authorization_header=authorization_header,
+                tls_context=tls_context,
+            )
+            if pinned_digest != resolved_digest:
+                _fail("pinned-manifest-digest", retryable=False)
+        return ResolvedOciArtifactManifest(digest=resolved_digest, manifest_bytes=manifest_bytes)
 
     async def fetch_blob(
         self,
@@ -356,7 +404,7 @@ def _require_success(response: httpx.Response) -> None:
         retryable = (
             response.status_code >= _SERVER_ERROR_MINIMUM_STATUS or response.status_code in _RETRYABLE_STATUS_CODES
         )
-        _fail("http-status", retryable=retryable)
+        raise CatalogRegistryClientError("http-status", retryable=retryable, status_code=response.status_code)
 
 
 def _fail(code: str, *, retryable: bool) -> None:

@@ -73,7 +73,7 @@ dependencies = [
     "pypdf>=6.19.0",
     "nh3>=0.2.21",
     "markdown-it-py>=4.0.0",
-    "syntara-plugin-contracts>=0.1.0",
+    "syntara-plugin-contracts==0.1.0a3",
 ]
 
 [project.optional-dependencies]
@@ -136,7 +136,6 @@ constraint-dependencies = [
 ]
 
 [tool.uv.sources]
-syntara-plugin-contracts = { path = "../../syntara-plugin-sdk/sdks/python/packages/contracts", editable = true }
 syntara-api-client = { path = "src/api_client", editable = true }
 orchestrator-cli = { path = "src/cli", editable = true }
 orchestrator-test-sdk = { path = "test-sdk", editable = true }

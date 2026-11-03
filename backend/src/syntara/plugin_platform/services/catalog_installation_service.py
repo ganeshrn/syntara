@@ -19,6 +19,7 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, Protocol
 
@@ -27,6 +28,7 @@ from sqlmodel import col, select
 
 from syntara.plugin_platform.exceptions import (
     CatalogPluginNotFoundError,
+    CatalogRegistryClientError,
     CatalogSourceConfigurationError,
     CatalogSourceDisabledError,
     CatalogSourceNotFoundError,
@@ -36,7 +38,10 @@ from syntara.plugin_platform.models.catalog import (
     PluginSource,
     PluginSourceReconciliation,
 )
+from syntara.plugin_platform.models.registry import InstalledPlugin, InstalledPluginAction
+from syntara.plugin_platform.models.runtime_binding import InstalledPluginRuntimeBinding
 from syntara.plugin_platform.services.artifact_verifier import (
+    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
     PluginArtifactInput,
     PluginArtifactVerifier,
     VerifiedPluginArtifact,
@@ -64,7 +69,19 @@ from syntara.plugin_platform.services.registry_service import (
     InstalledIntegrationTypeCandidate,
     InstallResult,
     PluginRegistryService,
+    RuntimeBindingCandidate,
+    RuntimeBindingOptionCandidate,
     VerifiedPluginCandidate,
+)
+from syntara.plugin_platform.services.runtime_binding_trust import (
+    RuntimeBindingTrustEvaluator,
+    RuntimeBindingTrustRequest,
+)
+from syntara_plugin.contracts import (
+    RuntimeBindingCheckpoint,
+    load_bundle,
+    validate_runtime_binding,
+    validate_runtime_binding_index,
 )
 
 if TYPE_CHECKING:
@@ -79,6 +96,12 @@ if TYPE_CHECKING:
 
 
 _CONTAINER_ABI: Literal["syntara.container/v1alpha1"] = "syntara.container/v1alpha1"
+_RUNTIME_BINDING_ARTIFACT_TYPE = "application/vnd.syntara.runtime-binding.v1"
+_RUNTIME_BINDING_CONFIG_MEDIA_TYPE = "application/vnd.syntara.runtime-binding.config.v1+json"
+_RUNTIME_BINDING_DOCUMENT_MEDIA_TYPE = "application/vnd.syntara.runtime-binding.document.v1+yaml"
+_RUNTIME_BINDING_INDEX_ARTIFACT_TYPE = "application/vnd.syntara.runtime-binding-index.v1"
+_RUNTIME_BINDING_INDEX_CONFIG_MEDIA_TYPE = "application/vnd.syntara.runtime-binding-index.config.v1+json"
+_RUNTIME_BINDING_INDEX_DOCUMENT_MEDIA_TYPE = "application/vnd.syntara.runtime-binding-index.document.v1+json"
 _ACTION_TARGET_KEYS = {
     "error",
     "identity",
@@ -173,6 +196,19 @@ class CatalogPluginInstallResult:
     idempotent: bool
 
 
+@dataclass(frozen=True)
+class RuntimeBindingRelease:
+    """Latest signed binding release accepted for one immutable plugin artifact."""
+
+    binding_digest: str
+    index_digest: str
+    generation: int
+    binding_trust: Mapping[str, str | int | bool | None]
+    index_trust: Mapping[str, str | int | bool | None]
+    workloads: Mapping[str, Mapping[str, Any]]
+    image_admissions: Mapping[str, Mapping[str, Any]]
+
+
 class CatalogPluginInstallationService:
     """Resolve, admit, and install a plugin selected from an active catalog."""
 
@@ -187,6 +223,7 @@ class CatalogPluginInstallationService:
         artifact_verifier: PluginArtifactVerifier | None = None,
         tls_context_resolver: CatalogRegistryTLSContextResolver | None = None,
         runner_profile_resolver: PlatformRunnerProfileResolver | None = None,
+        runtime_binding_trust_evaluator: RuntimeBindingTrustEvaluator | None = None,
     ) -> None:
         """Bind explicit backend-owned access, trust, image, and persistence ports."""
         self._session = session
@@ -197,6 +234,7 @@ class CatalogPluginInstallationService:
         self._artifact_verifier = artifact_verifier or PluginArtifactVerifier()
         self._tls_context_resolver = tls_context_resolver or SystemTrustCatalogRegistryTLSContextResolver()
         self._runner_profile_resolver = runner_profile_resolver
+        self._runtime_binding_trust_evaluator = runtime_binding_trust_evaluator
 
     async def install(
         self,
@@ -286,14 +324,31 @@ class CatalogPluginInstallationService:
                 )
             )
             _require_artifact_identity(artifact.canonical_descriptor, version)
+            binding_release = await self._load_latest_runtime_binding(
+                artifact.canonical_descriptor,
+                version,
+                source,
+                plugin_manifest_bytes=resolved.manifest_bytes,
+                locator=locator,
+                authorization=authorization,
+                tls_context=tls_context,
+            )
             runner_profiles = await self._resolve_runner_profiles(artifact.canonical_descriptor)
             candidate = build_catalog_install_candidate(
                 artifact,
                 version,
                 artifact_trust_summary,
                 runner_profiles=runner_profiles,
+                runtime_binding_release=binding_release,
             )
-            workload_summary = await self._admit_workload_images(candidate, version, source)
+            workload_summary = await self._admit_workload_images(
+                candidate, version, source, binding_release=binding_release
+            )
+            candidate = _candidate_with_runtime_image_evidence(
+                candidate,
+                workload_summary,
+                binding_release,
+            )
             candidate = candidate.model_copy(
                 update={
                     "verification_summary": {
@@ -320,6 +375,252 @@ class CatalogPluginInstallationService:
             raise
         return _result_from_install(version.id, installed)
 
+    async def _load_latest_runtime_binding(
+        self,
+        descriptor: Mapping[str, Any],
+        version: CatalogPluginVersion,
+        source: PluginSource,
+        *,
+        plugin_manifest_bytes: bytes,
+        locator: PluginArtifactLocator,
+        authorization: str | None,
+        tls_context: Any,
+    ) -> RuntimeBindingRelease | None:
+        """Fetch the latest signed binding index and its newest available release."""
+        specification = _mapping(descriptor.get("spec"), "plugin specification")
+        workloads = _mapping(specification.get("workloads"), "plugin workloads")
+        if not workloads:
+            return None
+        if self._runtime_binding_trust_evaluator is None:
+            raise CatalogSourceConfigurationError("Runtime-binding trust verification is not configured")
+
+        index_channel = f"runtime-bindings-{version.artifact_digest.removeprefix('sha256:')}"
+        try:
+            resolved_index = await self._registry_client.fetch_oci_artifact_manifest(
+                locator,
+                reference=index_channel,
+                authorization_header=authorization,
+                tls_context=tls_context,
+            )
+        except CatalogRegistryClientError as error:
+            # An older plugin can carry its one image directly in P. A new
+            # image-less P must have an independently published binding index.
+            if error.status_code == 404:
+                return None
+            raise
+
+        index_trust = await self._runtime_binding_trust_evaluator.evaluate_runtime_binding(
+            RuntimeBindingTrustRequest(
+                source_id=source.source_id,
+                registry_origin=source.registry_origin,
+                artifact_repository=version.artifact_repository,
+                artifact_digest=resolved_index.digest,
+                namespace=version.namespace,
+                name=version.name,
+                version=version.version,
+                artifact_kind="runtime-binding-index",
+                trust_policy_ref=source.trust_policy_ref,
+                mirror_policy=source.mirror_policy,
+                source_mode=source.source_mode,
+            )
+        )
+        index_config, index_document, _index_subject, index_document_digest = await self._fetch_oci_document(
+            locator,
+            resolved_index.digest,
+            resolved_index.manifest_bytes,
+            artifact_type=_RUNTIME_BINDING_INDEX_ARTIFACT_TYPE,
+            config_media_type=_RUNTIME_BINDING_INDEX_CONFIG_MEDIA_TYPE,
+            document_media_type=_RUNTIME_BINDING_INDEX_DOCUMENT_MEDIA_TYPE,
+            authorization=authorization,
+            tls_context=tls_context,
+        )
+        if (
+            index_config.get("apiVersion") != "syntara.runtime-binding-index.config/v1alpha1"
+            or index_config.get("kind") != "RuntimeBindingIndexArtifactConfig"
+            or index_config.get("contractBundleDigest") != load_bundle().digest
+            or index_config.get("pluginDigest") != version.artifact_digest
+            or index_config.get("documentDigest") != index_document_digest
+            or index_config.get("generation")
+            != _mapping(index_document.get("metadata"), "index metadata").get("generation")
+        ):
+            raise CatalogSourceConfigurationError("Runtime-binding index config does not match this plugin")
+        index_metadata = _mapping(index_document.get("metadata"), "runtime-binding index metadata")
+        generation = index_metadata.get("generation")
+        if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
+            raise CatalogSourceConfigurationError("Runtime-binding index generation is invalid")
+        previous = await self._stored_binding_index_checkpoint(version)
+        if previous is None:
+            # A first install may start after several publisher-side updates.
+            # The signed latest index is accepted as the initial checkpoint;
+            # subsequent installs must extend it by exactly one generation.
+            checkpoint = RuntimeBindingCheckpoint(
+                generation=generation - 1,
+                index_digest=index_metadata.get("previousIndexDigest"),
+            )
+        elif previous[0] == resolved_index.digest:
+            checkpoint = RuntimeBindingCheckpoint(
+                generation=generation - 1,
+                index_digest=index_metadata.get("previousIndexDigest"),
+            )
+        else:
+            checkpoint = RuntimeBindingCheckpoint(generation=previous[1], index_digest=previous[0])
+        diagnostics = validate_runtime_binding_index(
+            load_bundle(),
+            index_document,
+            plugin_digest=version.artifact_digest,
+            now=datetime.now(UTC),
+            checkpoint=checkpoint,
+        )
+        if diagnostics:
+            raise CatalogSourceConfigurationError("Runtime-binding index failed contract validation")
+        entries = _mapping(index_document.get("spec"), "runtime-binding index spec").get("entries")
+        if not isinstance(entries, list):
+            raise CatalogSourceConfigurationError("Runtime-binding index entries are invalid")
+        eligible = [entry for entry in entries if isinstance(entry, Mapping) and entry.get("status") == "available"]
+        if not eligible:
+            raise CatalogSourceConfigurationError("Runtime-binding index has no available release")
+        selected = eligible[-1]
+        binding_repository = _string(selected.get("bindingRepository"), "binding repository")
+        binding_digest = _string(selected.get("bindingDigest"), "binding digest")
+        _require_repository_scope(binding_repository, source.repository_scopes)
+        binding_locator = PluginArtifactLocator(source.registry_origin, binding_repository)
+        resolved_binding = await self._registry_client.fetch_oci_artifact_manifest(
+            binding_locator,
+            reference=binding_digest,
+            authorization_header=authorization,
+            tls_context=tls_context,
+        )
+        if resolved_binding.digest != binding_digest:
+            raise CatalogSourceConfigurationError("RuntimeBinding digest differs from the signed index")
+        binding_trust = await self._runtime_binding_trust_evaluator.evaluate_runtime_binding(
+            RuntimeBindingTrustRequest(
+                source_id=source.source_id,
+                registry_origin=source.registry_origin,
+                artifact_repository=binding_repository,
+                artifact_digest=binding_digest,
+                namespace=version.namespace,
+                name=version.name,
+                version=version.version,
+                artifact_kind="runtime-binding",
+                trust_policy_ref=source.trust_policy_ref,
+                mirror_policy=source.mirror_policy,
+                source_mode=source.source_mode,
+            )
+        )
+        binding_config, binding_document, binding_subject, binding_document_digest = await self._fetch_oci_document(
+            binding_locator,
+            binding_digest,
+            resolved_binding.manifest_bytes,
+            artifact_type=_RUNTIME_BINDING_ARTIFACT_TYPE,
+            config_media_type=_RUNTIME_BINDING_CONFIG_MEDIA_TYPE,
+            document_media_type=_RUNTIME_BINDING_DOCUMENT_MEDIA_TYPE,
+            authorization=authorization,
+            tls_context=tls_context,
+        )
+        expected_subject = {
+            "digest": version.artifact_digest,
+            "mediaType": OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+            "size": len(plugin_manifest_bytes),
+        }
+        binding_spec = _mapping(binding_document.get("spec"), "runtime-binding spec")
+        plugin_link = _mapping(binding_spec.get("plugin"), "runtime-binding plugin link")
+        if (
+            binding_config.get("apiVersion") != "syntara.runtime-binding.config/v1alpha1"
+            or binding_config.get("kind") != "RuntimeBindingArtifactConfig"
+            or binding_config.get("contractBundleDigest") != load_bundle().digest
+            or binding_config.get("bindingDocumentDigest") != binding_document_digest
+            or binding_config.get("pluginArtifactDigest") != version.artifact_digest
+            or binding_subject != expected_subject
+            or plugin_link.get("repository") != version.artifact_repository
+            or plugin_link.get("digest") != version.artifact_digest
+        ):
+            raise CatalogSourceConfigurationError("RuntimeBinding does not identify the exact plugin artifact")
+        diagnostics = validate_runtime_binding(
+            load_bundle(), binding_document, resolved=True, plugin_descriptor=descriptor
+        )
+        if diagnostics:
+            raise CatalogSourceConfigurationError("RuntimeBinding failed contract validation")
+        binding_workloads = _mapping(binding_spec.get("workloads"), "runtime-binding workloads")
+        return RuntimeBindingRelease(
+            binding_digest=binding_digest,
+            index_digest=resolved_index.digest,
+            generation=generation,
+            binding_trust=safe_trust_summary(binding_trust.summary),
+            index_trust=safe_trust_summary(index_trust.summary),
+            workloads=binding_workloads,
+            image_admissions={},
+        )
+
+    async def _stored_binding_index_checkpoint(self, version: CatalogPluginVersion) -> tuple[str, int] | None:
+        """Return the newest index checkpoint already installed for this P digest."""
+        statement = (
+            select(InstalledPluginRuntimeBinding)
+            .join(
+                InstalledPluginAction,
+                col(InstalledPluginRuntimeBinding.step_revision_id) == col(InstalledPluginAction.step_revision_id),
+            )
+            .join(InstalledPlugin, col(InstalledPluginAction.plugin_installation_id) == col(InstalledPlugin.id))
+            .where(
+                col(InstalledPlugin.namespace) == version.namespace,
+                col(InstalledPlugin.name) == version.name,
+                col(InstalledPlugin.version) == version.version,
+                col(InstalledPlugin.artifact_digest) == version.artifact_digest,
+            )
+            .order_by(col(InstalledPluginRuntimeBinding.binding_index_generation).desc())
+        )
+        existing = (await self._session.exec(statement)).first()
+        if existing is None:
+            return None
+        return existing.binding_index_digest, existing.binding_index_generation
+
+    async def _fetch_oci_document(
+        self,
+        locator: PluginArtifactLocator,
+        digest: str,
+        manifest_bytes: bytes,
+        *,
+        artifact_type: str,
+        config_media_type: str,
+        document_media_type: str,
+        authorization: str | None,
+        tls_context: Any,
+    ) -> tuple[Mapping[str, Any], Mapping[str, Any], Mapping[str, Any] | None, str]:
+        """Fetch a bounded OCI config/document only after its manifest digest is trusted."""
+        manifest = _json_object(manifest_bytes, "runtime-binding OCI manifest")
+        if (
+            manifest.get("schemaVersion") != 2
+            or manifest.get("mediaType") != OCI_IMAGE_MANIFEST_MEDIA_TYPE
+            or manifest.get("artifactType") != artifact_type
+        ):
+            raise CatalogSourceConfigurationError("OCI artifact has an unsupported Syntara artifact type")
+        config_descriptor = _oci_blob_descriptor(manifest.get("config"), config_media_type, "config")
+        layers = manifest.get("layers")
+        if not isinstance(layers, list) or len(layers) != 1:
+            raise CatalogSourceConfigurationError("OCI artifact must contain exactly one document layer")
+        document_descriptor = _oci_blob_descriptor(layers[0], document_media_type, "document")
+        if config_descriptor["size"] > 1_048_576 or document_descriptor["size"] > 16_777_216:
+            raise CatalogSourceConfigurationError("OCI artifact document exceeds the configured size limit")
+        config_bytes = await self._registry_client.fetch_blob(
+            locator,
+            digest=config_descriptor["digest"],
+            maximum_bytes=config_descriptor["size"],
+            authorization_header=authorization,
+            tls_context=tls_context,
+        )
+        document_bytes = await self._registry_client.fetch_blob(
+            locator,
+            digest=document_descriptor["digest"],
+            maximum_bytes=document_descriptor["size"],
+            authorization_header=authorization,
+            tls_context=tls_context,
+        )
+        if len(config_bytes) != config_descriptor["size"] or len(document_bytes) != document_descriptor["size"]:
+            raise CatalogSourceConfigurationError("OCI artifact blob size differs from its descriptor")
+        config = _json_object(config_bytes, "runtime-binding OCI config")
+        document = _json_object(document_bytes, "runtime-binding document")
+        subject = manifest.get("subject")
+        return config, document, dict(subject) if isinstance(subject, Mapping) else None, document_descriptor["digest"]
+
     async def _resolve_runner_profiles(
         self,
         descriptor: Mapping[str, Any],
@@ -340,12 +641,19 @@ class CatalogPluginInstallationService:
         candidate: VerifiedPluginCandidate,
         version: CatalogPluginVersion,
         source: PluginSource,
+        *,
+        binding_release: RuntimeBindingRelease | None,
     ) -> list[dict[str, Any]]:
         """Evaluate each unique exact publisher image before registry persistence."""
+        image_digests = {
+            action.image_digest for action in candidate.actions if action.runtime_kind == "custom-workload"
+        }
+        if binding_release is not None:
+            for workload in binding_release.workloads.values():
+                for option in workload["options"]:
+                    image_digests.add(_string(option.get("image"), "runtime-binding image"))
         summaries: list[dict[str, Any]] = []
-        for image_digest in sorted(
-            {action.image_digest for action in candidate.actions if action.runtime_kind == "custom-workload"}
-        ):
+        for image_digest in sorted(image_digests):
             decision = await self._workload_image_evaluator.evaluate_workload_image(
                 WorkloadImageAdmissionRequest(
                     source_id=source.source_id,
@@ -421,6 +729,7 @@ def build_catalog_install_candidate(
     artifact_trust_summary: Mapping[str, str | int | bool | None],
     *,
     runner_profiles: Mapping[str, PlatformRunnerProfile] | None = None,
+    runtime_binding_release: RuntimeBindingRelease | None = None,
 ) -> VerifiedPluginCandidate:
     """Convert one verified descriptor into an install candidate.
 
@@ -441,7 +750,16 @@ def build_catalog_install_candidate(
     workloads = _mapping(specification.get("workloads"), "plugin workloads")
     profiles = runner_profiles or {}
     action_targets, integration_targets, credential_targets = _partition_plugin_targets(specification.get("targets"))
-    action_bindings = [_action_from_target(target, version, workloads, profiles) for target in action_targets]
+    action_bindings = [
+        _action_from_target(
+            target,
+            version,
+            workloads,
+            profiles,
+            runtime_binding_release=runtime_binding_release,
+        )
+        for target in action_targets
+    ]
     actions = [binding.action for binding in action_bindings]
     integration_types = [_integration_type_from_target(target, version) for target in integration_targets]
     credential_types = [_credential_type_from_target(target, version) for target in credential_targets]
@@ -504,10 +822,10 @@ def _validate_runtime_ownership(
         workload_ids = {
             binding.workload_id for binding in action_bindings if binding.action.runtime_kind == "custom-workload"
         }
-        if len(workload_ids) != 1 or None in workload_ids:
-            _unsupported_descriptor("multiple custom workloads")
+        if None in workload_ids:
+            _unsupported_descriptor("custom workload assignment")
         if set(workloads) != workload_ids:
-            _unsupported_descriptor("additional workload or provider binding")
+            _unsupported_descriptor("workload declaration set")
         return
     if workloads:
         _unsupported_descriptor("platform runner workload binding")
@@ -529,12 +847,12 @@ def _action_from_target(
     version: CatalogPluginVersion,
     workloads: Mapping[str, Any],
     runner_profiles: Mapping[str, PlatformRunnerProfile],
+    *,
+    runtime_binding_release: RuntimeBindingRelease | None = None,
 ) -> _ActionBinding:
     """Validate one canonical action target and its inherited workload binding."""
     target = _mapping(raw_target, "action target")
-    expected_keys = set(
-        _ACTION_TARGET_KEYS_WITH_INTEGRATION if "integrationType" in target else _ACTION_TARGET_KEYS
-    )
+    expected_keys = set(_ACTION_TARGET_KEYS_WITH_INTEGRATION if "integrationType" in target else _ACTION_TARGET_KEYS)
     if "inputPresentation" in target:
         expected_keys |= _ACTION_PRESENTATION_KEY
     if "schemaDigests" in target:
@@ -554,6 +872,16 @@ def _action_from_target(
     if runtime_kind == "platform-runner":
         return _platform_runner_action(target, runtime, runner_profiles)
     workload_id, image_digest = _custom_workload_binding(runtime, workloads)
+    runtime_bindings: tuple[RuntimeBindingCandidate, ...] = ()
+    if runtime_binding_release is not None and workload_id in runtime_binding_release.workloads:
+        runtime_binding = _runtime_binding_candidate(runtime_binding_release, workload_id)
+        default_option = next(
+            option for option in runtime_binding.options if option.name == runtime_binding.default_option
+        )
+        image_digest = default_option.image_digest
+        runtime_bindings = (runtime_binding,)
+    if image_digest is None:
+        _unsupported_descriptor("custom workload image binding")
     try:
         action = InstalledActionCandidate(
             target_name=target_name,
@@ -570,6 +898,7 @@ def _action_from_target(
             output_schema=_schema(target.get("output"), "action output schema"),
             error_schema=_schema(target.get("error"), "action error schema"),
             canonical_definition=dict(target),
+            runtime_bindings=runtime_bindings,
         )
     except ValidationError as error:
         msg = "Catalog action is not a supported installed-action definition"
@@ -674,7 +1003,7 @@ def _credential_type_from_target(
         raise CatalogSourceConfigurationError(msg) from error
 
 
-def _custom_workload_binding(runtime: Mapping[str, Any], workloads: Mapping[str, Any]) -> tuple[str, str]:
+def _custom_workload_binding(runtime: Mapping[str, Any], workloads: Mapping[str, Any]) -> tuple[str, str | None]:
     """Return the one server-admitted workload inherited by a custom action."""
     runtime_kind = runtime.get("kind")
     if runtime_kind not in {"custom-runner", "custom-workload"} or runtime.get("abi") != _CONTAINER_ABI:
@@ -686,11 +1015,123 @@ def _custom_workload_binding(runtime: Mapping[str, Any], workloads: Mapping[str,
         _require_keys(runtime, _CUSTOM_RUNTIME_KEYS, "custom workload runtime")
     workload_id = _string(runtime.get("workload"), "custom workload identifier")
     workload = _mapping(workloads.get(workload_id), "custom workload binding")
-    _require_keys(workload, _WORKLOAD_BINDING_KEYS, "custom workload binding")
+    if set(workload) not in ({"abi"}, _WORKLOAD_BINDING_KEYS):
+        _unsupported_descriptor("custom workload binding")
     image_digest = workload.get("image")
-    if workload.get("abi") != _CONTAINER_ABI or not isinstance(image_digest, str):
+    if workload.get("abi") != _CONTAINER_ABI or (image_digest is not None and not isinstance(image_digest, str)):
         _unsupported_descriptor("custom workload binding")
     return workload_id, image_digest
+
+
+def _runtime_binding_candidate(
+    release: RuntimeBindingRelease,
+    workload_id: str,
+) -> RuntimeBindingCandidate:
+    """Convert one validated binding workload into its safe persisted options."""
+    workload = _mapping(release.workloads.get(workload_id), "runtime-binding workload")
+    raw_options = workload.get("options")
+    if not isinstance(raw_options, list):
+        _unsupported_descriptor("runtime-binding workload options")
+    options = tuple(
+        RuntimeBindingOptionCandidate(
+            name=_string(option.get("name"), "runtime image option name"),
+            display_name=_string(option.get("displayName"), "runtime image option display name"),
+            description=(
+                _optional_string(option.get("description"), "runtime image option description")
+                if "description" in option
+                else None
+            ),
+            image_digest=_string(option.get("image"), "runtime image option digest"),
+        )
+        for option in (_mapping(value, "runtime image option") for value in raw_options)
+    )
+    return RuntimeBindingCandidate(
+        binding_digest=release.binding_digest,
+        binding_index_digest=release.index_digest,
+        binding_index_generation=release.generation,
+        workload_id=workload_id,
+        default_option=_string(workload.get("default"), "runtime workload default"),
+        options=options,
+        verification_summary={
+            "binding": dict(release.binding_trust),
+            "bindingIndex": dict(release.index_trust),
+        },
+    )
+
+
+def _candidate_with_runtime_image_evidence(
+    candidate: VerifiedPluginCandidate,
+    workload_summary: list[dict[str, Any]],
+    binding_release: RuntimeBindingRelease | None,
+) -> VerifiedPluginCandidate:
+    """Attach policy evidence for every image option without storing image content."""
+    admission_by_digest = {
+        str(item["imageDigest"]): item["admission"]
+        for item in workload_summary
+        if isinstance(item, Mapping) and isinstance(item.get("imageDigest"), str)
+    }
+    actions = []
+    for action in candidate.actions:
+        bindings = []
+        for binding in action.runtime_bindings:
+            bindings.append(
+                binding.model_copy(
+                    update={
+                        "verification_summary": {
+                            **binding.verification_summary,
+                            "imageAdmissions": {
+                                option.name: admission_by_digest.get(option.image_digest, {})
+                                for option in binding.options
+                            },
+                        }
+                    }
+                )
+            )
+        actions.append(action.model_copy(update={"runtime_bindings": tuple(bindings)}))
+    runtime_summary: dict[str, Any] = {"workloadImages": workload_summary}
+    if binding_release is not None:
+        runtime_summary["binding"] = {
+            "digest": binding_release.binding_digest,
+            "indexDigest": binding_release.index_digest,
+            "indexGeneration": binding_release.generation,
+            "bindingTrust": dict(binding_release.binding_trust),
+            "indexTrust": dict(binding_release.index_trust),
+        }
+    return candidate.model_copy(
+        update={
+            "actions": tuple(actions),
+            "verification_summary": {
+                **candidate.verification_summary,
+                "runtime": runtime_summary,
+            },
+        }
+    )
+
+
+def _json_object(content: bytes, label: str) -> Mapping[str, Any]:
+    """Decode the canonical JSON representation used by SDK OCI documents."""
+    try:
+        decoded = json.loads(content)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CatalogSourceConfigurationError(f"{label} is not valid canonical JSON") from error
+    return _mapping(decoded, label)
+
+
+def _oci_blob_descriptor(value: object, expected_media_type: str, label: str) -> dict[str, Any]:
+    """Validate one bounded descriptor before asking the registry for its blob."""
+    descriptor = _mapping(value, f"OCI {label} descriptor")
+    digest = descriptor.get("digest")
+    size = descriptor.get("size")
+    if (
+        descriptor.get("mediaType") != expected_media_type
+        or not isinstance(digest, str)
+        or re.fullmatch(r"sha256:[a-f0-9]{64}", digest) is None
+        or not isinstance(size, int)
+        or isinstance(size, bool)
+        or size < 1
+    ):
+        raise CatalogSourceConfigurationError(f"OCI {label} descriptor is invalid")
+    return {"digest": digest, "mediaType": expected_media_type, "size": size}
 
 
 def _result_from_install(version_id: UUID, installed: InstallResult) -> CatalogPluginInstallResult:

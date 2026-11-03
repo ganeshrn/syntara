@@ -1694,6 +1694,72 @@ components:
           type: object
           additionalProperties: true
           title: Error Schema
+        runtime_bindings:
+          type: array
+          title: Runtime Bindings
+          description: Admitted RuntimeBinding options, newest index first.
+          items:
+            $ref: "#/components/schemas/InstalledPluginRuntimeBindingRead"
+
+    InstalledPluginRuntimeBindingOptionRead:
+      type: object
+      title: InstalledPluginRuntimeBindingOptionRead
+      required:
+        - name
+        - display_name
+        - image_digest
+      properties:
+        name:
+          type: string
+          title: Name
+        display_name:
+          type: string
+          title: Display Name
+        description:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Description
+        image_digest:
+          type: string
+          title: Image Digest
+
+    InstalledPluginRuntimeBindingRead:
+      type: object
+      title: InstalledPluginRuntimeBindingRead
+      required:
+        - binding_digest
+        - binding_index_digest
+        - binding_index_generation
+        - workload_id
+        - default_option
+        - options
+      properties:
+        binding_digest:
+          type: string
+          title: Binding Digest
+        binding_index_digest:
+          type: string
+          title: Binding Index Digest
+        binding_index_generation:
+          type: integer
+          minimum: 1
+          title: Binding Index Generation
+        workload_id:
+          type: string
+          title: Workload Id
+        default_option:
+          type: string
+          title: Default Option
+        options:
+          type: array
+          title: Options
+          items:
+            $ref: "#/components/schemas/InstalledPluginRuntimeBindingOptionRead"
+        verification_summary:
+          type: object
+          additionalProperties: true
+          title: Verification Summary
 
     InstalledPluginRead:
       type: object

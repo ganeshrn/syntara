@@ -386,9 +386,10 @@ class APIExecutorParameters(TemplateAwareBaseModel):
 class ExternalActionParameters(BaseModel):
     """A generic installed plugin action selected by immutable revision.
 
-    The workflow stores only the installed action revision, an optional project
-    connection identity, and structured inputs. Publication resolves and pins
-    the image and runtime route in a separate durable binding; workflow authors
+    The workflow stores the installed action revision, an optional project
+    connection identity, structured inputs, and optionally an approved
+    RuntimeBinding option identity. Publication resolves and pins the actual
+    image and runtime route in a separate durable binding; workflow authors
     cannot provide an image, command, policy, grant, or credential here.
     """
 
@@ -404,7 +405,36 @@ class ExternalActionParameters(BaseModel):
         default=None,
         description="Optional project-scoped plugin connection identity.",
     )
+    runtime_binding_digest: str | None = Field(
+        default=None,
+        min_length=71,
+        max_length=71,
+        pattern=r"^sha256:[a-f0-9]{64}$",
+        description="Optional exact approved RuntimeBinding artifact digest.",
+    )
+    binding_index_digest: str | None = Field(
+        default=None,
+        min_length=71,
+        max_length=71,
+        pattern=r"^sha256:[a-f0-9]{64}$",
+        description="Exact signed binding-index snapshot that advertised the RuntimeBinding.",
+    )
+    workload_id: str | None = Field(default=None, min_length=1, max_length=63)
+    workload_option: str | None = Field(default=None, min_length=1, max_length=63)
     inputs: dict[str, Any] = Field(default_factory=dict, description="Structured action inputs.")
+
+    @model_validator(mode="after")
+    def validate_runtime_binding_selection(self) -> ExternalActionParameters:
+        """Require all runtime-binding selection identifiers together."""
+        selection = (
+            self.runtime_binding_digest,
+            self.binding_index_digest,
+            self.workload_id,
+            self.workload_option,
+        )
+        if any(value is not None for value in selection) and any(value is None for value in selection):
+            raise SafeValueError("runtime binding selection fields must be provided together")
+        return self
 
 
 class IntegrationConnectionConfig(BaseModel):

@@ -273,6 +273,27 @@ class CatalogPluginListResponse(ResourcesResponse[CatalogPluginRead]):
     """Paginated catalog version projection for plugin discovery."""
 
 
+class InstalledPluginRuntimeBindingOptionRead(SQLModel):
+    """One approved, digest-pinned image option exposed for workflow authoring."""
+
+    name: str
+    display_name: str
+    description: str | None = None
+    image_digest: str
+
+
+class InstalledPluginRuntimeBindingRead(SQLModel):
+    """One immutable binding/index snapshot admitted for an installed action."""
+
+    binding_digest: str
+    binding_index_digest: str
+    binding_index_generation: int = Field(ge=1)
+    workload_id: str
+    default_option: str
+    options: list[InstalledPluginRuntimeBindingOptionRead]
+    verification_summary: dict[str, object] = Field(default_factory=dict)
+
+
 class InstalledPluginActionRead(SQLModel):
     """One immutable action exposed by an installed plugin revision.
 
@@ -295,6 +316,7 @@ class InstalledPluginActionRead(SQLModel):
     input_presentation: dict[str, object] | None = None
     output_schema: dict[str, object]
     error_schema: dict[str, object]
+    runtime_bindings: list[InstalledPluginRuntimeBindingRead] = Field(default_factory=list)
 
 
 class InstalledPluginRead(SQLModel):

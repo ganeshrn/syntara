@@ -762,6 +762,41 @@ export interface components {
       error_schema: {
         [key: string]: unknown
       }
+      /**
+       * Runtime Bindings
+       * @description Admitted RuntimeBinding options, newest index first.
+       */
+      runtime_bindings?: components['schemas']['InstalledPluginRuntimeBindingRead'][]
+    }
+    /** InstalledPluginRuntimeBindingOptionRead */
+    InstalledPluginRuntimeBindingOptionRead: {
+      /** Name */
+      name: string
+      /** Display Name */
+      display_name: string
+      /** Description */
+      description?: string | null
+      /** Image Digest */
+      image_digest: string
+    }
+    /** InstalledPluginRuntimeBindingRead */
+    InstalledPluginRuntimeBindingRead: {
+      /** Binding Digest */
+      binding_digest: string
+      /** Binding Index Digest */
+      binding_index_digest: string
+      /** Binding Index Generation */
+      binding_index_generation: number
+      /** Workload Id */
+      workload_id: string
+      /** Default Option */
+      default_option: string
+      /** Options */
+      options: components['schemas']['InstalledPluginRuntimeBindingOptionRead'][]
+      /** Verification Summary */
+      verification_summary?: {
+        [key: string]: unknown
+      }
     }
     /**
      * InstalledPluginRead

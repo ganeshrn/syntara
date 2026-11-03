@@ -38,6 +38,10 @@ class WorkflowActionBinding(BaseResource, table=True):
         "runtime_kind",
         "runtime_abi",
         "image_digest",
+        "runtime_binding_digest",
+        "binding_index_digest",
+        "workload_id",
+        "workload_option",
         "integration_type_revision_id",
         "plugin_connection_id",
         "runner_profile_revision_id",
@@ -96,6 +100,22 @@ class WorkflowActionBinding(BaseResource, table=True):
         sa_type=String(512),  # type: ignore[call-overload]
         description="Server-resolved immutable image route; never workflow supplied.",
     )
+    runtime_binding_digest: str | None = Field(
+        default=None,
+        min_length=71,
+        max_length=71,
+        sa_type=String(71),  # type: ignore[call-overload]
+        description="Exact publisher RuntimeBinding artifact selected for this workflow step.",
+    )
+    binding_index_digest: str | None = Field(
+        default=None,
+        min_length=71,
+        max_length=71,
+        sa_type=String(71),  # type: ignore[call-overload]
+        description="Binding-index snapshot used when the workflow selection was resolved.",
+    )
+    workload_id: str | None = Field(default=None, min_length=1, max_length=63)
+    workload_option: str | None = Field(default=None, min_length=1, max_length=63)
     integration_type_revision_id: UUID | None = Field(
         default=None,
         sa_column=Column(

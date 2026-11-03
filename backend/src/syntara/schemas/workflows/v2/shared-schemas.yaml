@@ -2164,6 +2164,40 @@ components:
             - type: 'null'
           title: Plugin Connection Id
           description: Optional project-scoped plugin connection identity.
+        runtime_binding_digest:
+          anyOf:
+            - type: string
+              minLength: 71
+              maxLength: 71
+              pattern: ^sha256:[a-f0-9]{64}$
+            - type: 'null'
+          title: Runtime Binding Digest
+          description: Admitted immutable RuntimeBinding selected for this action.
+        binding_index_digest:
+          anyOf:
+            - type: string
+              minLength: 71
+              maxLength: 71
+              pattern: ^sha256:[a-f0-9]{64}$
+            - type: 'null'
+          title: Binding Index Digest
+          description: Signed binding-index snapshot that authorized the selection.
+        workload_id:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 63
+            - type: 'null'
+          title: Workload Id
+          description: Logical workload declared by the selected step.
+        workload_option:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 63
+            - type: 'null'
+          title: Workload Option
+          description: Stable image option selected from the admitted binding.
         inputs:
           type: object
           additionalProperties: true

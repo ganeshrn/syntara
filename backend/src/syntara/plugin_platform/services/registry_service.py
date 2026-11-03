@@ -41,6 +41,7 @@ from syntara.plugin_platform.models.registry import (
     PluginRegistryGeneration,
     PluginRegistryState,
 )
+from syntara.plugin_platform.models.runtime_binding import InstalledPluginRuntimeBinding
 
 _JSON_FIELD_MAX_BYTES = 1_048_576
 _IDENTIFIER_PATTERN = r"^[a-z][a-z0-9-]{0,62}$"
@@ -98,14 +99,11 @@ class InstalledActionCandidate(BaseModel):
     error_schema: dict[str, Any]
     canonical_definition: dict[str, Any]
     input_presentation: dict[str, Any] | None = None
+    runtime_bindings: tuple["RuntimeBindingCandidate", ...] = ()
 
-    @field_validator(
-        "input_schema", "output_schema", "error_schema", "canonical_definition", "input_presentation"
-    )
+    @field_validator("input_schema", "output_schema", "error_schema", "canonical_definition", "input_presentation")
     @classmethod
-    def _validate_bounded_json(
-        cls, value: dict[str, Any] | None, info: ValidationInfo
-    ) -> dict[str, Any] | None:
+    def _validate_bounded_json(cls, value: dict[str, Any] | None, info: ValidationInfo) -> dict[str, Any] | None:
         if value is None:
             return None
         return validate_jsonb_size(value, field_name=str(info.field_name), max_bytes=_JSON_FIELD_MAX_BYTES)
@@ -304,6 +302,38 @@ class VerifiedPluginCandidate(BaseModel):
         return self
 
 
+class RuntimeBindingOptionCandidate(BaseModel):
+    """One digest-pinned image choice from a verified RuntimeBinding."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=1, max_length=63, pattern=_IDENTIFIER_PATTERN)
+    display_name: str = Field(min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=2_000)
+    image_digest: str = Field(min_length=73, max_length=512, pattern=_IMAGE_DIGEST_PATTERN)
+
+
+class RuntimeBindingCandidate(BaseModel):
+    """One immutable plugin binding revision made available to a step."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    binding_digest: str = Field(min_length=71, max_length=71, pattern=_SHA256_PATTERN)
+    binding_index_digest: str = Field(min_length=71, max_length=71, pattern=_SHA256_PATTERN)
+    binding_index_generation: int = Field(ge=1)
+    workload_id: str = Field(min_length=1, max_length=63, pattern=_IDENTIFIER_PATTERN)
+    default_option: str = Field(min_length=1, max_length=63, pattern=_IDENTIFIER_PATTERN)
+    options: tuple[RuntimeBindingOptionCandidate, ...] = Field(min_length=1, max_length=256)
+    verification_summary: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_default_option(self) -> "RuntimeBindingCandidate":
+        names = [option.name for option in self.options]
+        if len(names) != len(set(names)) or self.default_option not in names:
+            raise ValueError("runtime binding options must be unique and include the default")
+        return self
+
+
 @dataclass(frozen=True)
 class InstallResult:
     """The persisted install and generation selected by this call."""
@@ -340,6 +370,7 @@ class ResolvedInstalledAction:
     error_schema: Mapping[str, Any]
     canonical_definition: Mapping[str, Any]
     registry_generation: int | None
+    runtime_bindings: tuple[Mapping[str, Any], ...] = ()
 
 
 class PluginRegistryService:
@@ -375,6 +406,8 @@ class PluginRegistryService:
             if active_generation is None:
                 msg = "Installed plugin registry is missing its active generation"
                 raise PluginRegistryConfigurationError(msg)
+            await self._persist_runtime_binding_updates(existing.id, candidate, actor_id=actor_id)
+            await self._session.commit()
             return InstallResult(existing.id, active_generation.generation, idempotent=True)
 
         generation = PluginRegistryGeneration(
@@ -433,6 +466,7 @@ class PluginRegistryService:
         )
 
         for action in candidate.actions:
+            step_revision_id = _step_revision_id(candidate, action)
             self._session.add(
                 InstalledPluginAction(
                     plugin_installation_id=plugin.id,
@@ -441,7 +475,7 @@ class PluginRegistryService:
                     display_name=action.display_name,
                     description=action.description,
                     revision_digest=action.revision_digest,
-                    step_revision_id=_step_revision_id(candidate, action),
+                    step_revision_id=step_revision_id,
                     runtime_kind=action.runtime_kind,
                     runtime_abi=action.runtime_abi,
                     image_digest=action.image_digest,
@@ -458,6 +492,32 @@ class PluginRegistryService:
                     canonical_definition=action.canonical_definition,
                 )
             )
+            if action.runtime_bindings:
+                await self._session.flush()
+                self._session.add_all(
+                    [
+                        InstalledPluginRuntimeBinding(
+                            step_revision_id=step_revision_id,
+                            binding_digest=binding.binding_digest,
+                            binding_index_digest=binding.binding_index_digest,
+                            binding_index_generation=binding.binding_index_generation,
+                            workload_id=binding.workload_id,
+                            default_option=binding.default_option,
+                            options=[
+                                {
+                                    "name": option.name,
+                                    "displayName": option.display_name,
+                                    "description": option.description,
+                                    "imageDigest": option.image_digest,
+                                }
+                                for option in binding.options
+                            ],
+                            verification_summary=binding.verification_summary,
+                            approved_by=actor_id,
+                        )
+                        for binding in action.runtime_bindings
+                    ]
+                )
 
         previous_members = await self._members_for_active_generation(state)
         self._session.add_all(
@@ -482,6 +542,74 @@ class PluginRegistryService:
         await self._session.commit()
         return InstallResult(plugin.id, generation.generation, idempotent=False)
 
+    async def _persist_runtime_binding_updates(
+        self,
+        plugin_installation_id: UUID,
+        candidate: VerifiedPluginCandidate,
+        *,
+        actor_id: UUID | None,
+    ) -> None:
+        """Record newly approved B/index choices without creating a new P generation."""
+        actions = candidate.actions
+        step_revision_ids = [_step_revision_id(candidate, action) for action in actions if action.runtime_bindings]
+        if not step_revision_ids:
+            return
+        installed_actions = (
+            await self._session.exec(
+                select(InstalledPluginAction).where(
+                    InstalledPluginAction.plugin_installation_id == plugin_installation_id,
+                    col(InstalledPluginAction.step_revision_id).in_(step_revision_ids),
+                )
+            )
+        ).all()
+        installed_by_revision = {action.step_revision_id: action for action in installed_actions}
+        existing_bindings = (
+            await self._session.exec(
+                select(InstalledPluginRuntimeBinding).where(
+                    col(InstalledPluginRuntimeBinding.step_revision_id).in_(step_revision_ids)
+                )
+            )
+        ).all()
+        existing_keys = {
+            (binding.step_revision_id, binding.binding_digest, binding.binding_index_digest)
+            for binding in existing_bindings
+        }
+        new_records: list[InstalledPluginRuntimeBinding] = []
+        for action in actions:
+            if not action.runtime_bindings:
+                continue
+            step_revision_id = _step_revision_id(candidate, action)
+            if step_revision_id not in installed_by_revision:
+                raise PluginRegistryConfigurationError
+            for binding in action.runtime_bindings:
+                identity = (step_revision_id, binding.binding_digest, binding.binding_index_digest)
+                if identity in existing_keys:
+                    continue
+                existing_keys.add(identity)
+                new_records.append(
+                    InstalledPluginRuntimeBinding(
+                        step_revision_id=step_revision_id,
+                        binding_digest=binding.binding_digest,
+                        binding_index_digest=binding.binding_index_digest,
+                        binding_index_generation=binding.binding_index_generation,
+                        workload_id=binding.workload_id,
+                        default_option=binding.default_option,
+                        options=[
+                            {
+                                "name": option.name,
+                                "displayName": option.display_name,
+                                "description": option.description,
+                                "imageDigest": option.image_digest,
+                            }
+                            for option in binding.options
+                        ],
+                        verification_summary=binding.verification_summary,
+                        approved_by=actor_id,
+                    )
+                )
+        if new_records:
+            self._session.add_all(new_records)
+
     async def resolve_enabled_action(self, step_revision_id: str) -> ResolvedInstalledAction:
         """Resolve an action only if it is enabled in the active generation."""
         state = await self._state_for_read()
@@ -505,7 +633,13 @@ class PluginRegistryService:
         if row is None:
             raise InstalledActionNotFoundError
         action, plugin = row
-        return _resolved_action(action, plugin, registry_generation=active_generation.generation)
+        runtime_bindings = await self._runtime_bindings_for_action(action.step_revision_id)
+        return _resolved_action(
+            action,
+            plugin,
+            registry_generation=active_generation.generation,
+            runtime_bindings=runtime_bindings,
+        )
 
     async def resolve_pinned_action(self, step_revision_id: str) -> ResolvedInstalledAction:
         """Read a revision already pinned by a published workflow.
@@ -524,7 +658,41 @@ class PluginRegistryService:
         if row is None:
             raise InstalledActionNotFoundError
         action, plugin = row
-        return _resolved_action(action, plugin, registry_generation=None)
+        runtime_bindings = await self._runtime_bindings_for_action(action.step_revision_id)
+        return _resolved_action(
+            action,
+            plugin,
+            registry_generation=None,
+            runtime_bindings=runtime_bindings,
+        )
+
+    async def _runtime_bindings_for_action(self, step_revision_id: str) -> tuple[Mapping[str, Any], ...]:
+        """Load immutable, admitted image choices for one installed action."""
+        result = await self._session.exec(
+            select(InstalledPluginRuntimeBinding)
+            .where(InstalledPluginRuntimeBinding.step_revision_id == step_revision_id)
+            .order_by(InstalledPluginRuntimeBinding.binding_index_generation.desc())
+        )
+        return tuple(
+            {
+                "bindingDigest": binding.binding_digest,
+                "bindingIndexDigest": binding.binding_index_digest,
+                "bindingIndexGeneration": binding.binding_index_generation,
+                "workloadId": binding.workload_id,
+                "defaultOption": binding.default_option,
+                "options": [
+                    {
+                        "name": option["name"],
+                        "displayName": option["displayName"],
+                        "description": option.get("description"),
+                        "imageDigest": option["imageDigest"],
+                    }
+                    for option in binding.options
+                ],
+                "verification": binding.verification_summary,
+            }
+            for binding in result.all()
+        )
 
     async def set_enabled(
         self,
@@ -641,6 +809,7 @@ def _resolved_action(
     plugin: InstalledPlugin,
     *,
     registry_generation: int | None,
+    runtime_bindings: tuple[Mapping[str, Any], ...] = (),
 ) -> ResolvedInstalledAction:
     """Map immutable persistence records to one trusted runtime route."""
     return ResolvedInstalledAction(
@@ -657,4 +826,5 @@ def _resolved_action(
         error_schema=action.error_schema,
         canonical_definition=deepcopy(action.canonical_definition),
         registry_generation=registry_generation,
+        runtime_bindings=runtime_bindings,
     )

@@ -34,6 +34,10 @@ from syntara.plugin_platform.services.plugin_artifact_trust import (
     PluginArtifactTrustDecision,
     PluginArtifactTrustRequest,
 )
+from syntara.plugin_platform.services.runtime_binding_trust import (
+    RuntimeBindingTrustDecision,
+    RuntimeBindingTrustRequest,
+)
 from syntara.plugin_platform.services.runner_profile import DatabasePlatformRunnerProfileResolver
 from syntara.plugin_platform.source_profile import (
     LOCAL_POC_REGISTRY_ORIGINS,
@@ -117,6 +121,27 @@ class LocalPocPluginArtifactTrustEvaluator:
             summary={
                 "profile": "local-poc",
                 "operation": "catalog-metadata",
+                "registryTransport": "loopback-http",
+                "signatureVerification": "skipped",
+                "unsafeDevelopmentMode": True,
+            }
+        )
+
+    async def evaluate_runtime_binding(self, request: RuntimeBindingTrustRequest) -> RuntimeBindingTrustDecision:
+        """Use the same explicit loopback-only unsigned exception as plugin metadata."""
+        try:
+            validate_local_poc_plugin_artifact_trust(
+                source_mode=request.source_mode,
+                registry_origin=request.registry_origin,
+                trust_policy_ref=request.trust_policy_ref,
+                mirror_policy=request.mirror_policy,
+            )
+        except ValueError as exc:
+            raise CatalogSourceConfigurationError(str(exc)) from exc
+        return RuntimeBindingTrustDecision(
+            summary={
+                "profile": "local-poc",
+                "operation": request.artifact_kind,
                 "registryTransport": "loopback-http",
                 "signatureVerification": "skipped",
                 "unsafeDevelopmentMode": True,
@@ -226,4 +251,5 @@ def build_local_poc_catalog_installation_service(
         workload_image_evaluator=LocalPocWorkloadImageAdmissionEvaluator(),
         registry_client=registry_client,
         runner_profile_resolver=DatabasePlatformRunnerProfileResolver(session),
+        runtime_binding_trust_evaluator=LocalPocPluginArtifactTrustEvaluator(),
     )
