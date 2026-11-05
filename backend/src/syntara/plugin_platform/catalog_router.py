@@ -27,6 +27,9 @@ from syntara.plugin_platform.schemas import (
     CatalogPluginListParams,
     CatalogPluginListResponse,
     CatalogPluginRead,
+    CatalogPluginRuntimeBindingPreviewRead,
+    CatalogRuntimeBindingOptionRead,
+    CatalogRuntimeBindingRead,
 )
 from syntara.plugin_platform.services.catalog_browse_service import CatalogBrowseService
 from syntara.plugin_platform.services.catalog_installation_service import CatalogPluginInstallationService
@@ -64,9 +67,10 @@ async def get_catalog_plugin_installation_service(
     ``plugin_catalog_installation_service_factory`` on application state. Its
     only input is the request database session; it owns the registry access,
     trust, and workload-admission adapters.  The sole exception is the
-    explicitly enabled loopback-only local-PoC composition.  It still verifies
-    the catalog-selected artifact and only resolves a server-owned persisted
-    platform-runner profile; it cannot admit publisher workload images.
+    explicitly enabled loopback-only local-PoC composition. It verifies the
+    catalog-selected artifact, resolves server-owned platform-runner profiles,
+    and admits only digest-pinned publisher images from the configured local
+    registry under the explicit local-PoC trust profile.
     """
     if get_settings().plugin_platform_local_poc_enabled:
         async with OciDistributionClient() as client:
@@ -156,6 +160,72 @@ async def get_catalog_plugin_version(
 ) -> CatalogPluginRead:
     """Inspect one version; require source selection if active sources conflict."""
     return await service.get_plugin_version(namespace, name, version, source_id=source_id)
+
+
+@router.get(
+    "/{namespace}/{name}/versions/{version}/runtime-bindings",
+    summary="Preview catalog plugin runtime bindings",
+    dependencies=[Depends(_catalog_read)],
+    operation_id="get_catalog_plugin_runtime_bindings",
+    response_description="Verified, admitted workload image options for one catalog plugin release",
+    responses={
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "model": ErrorData,
+            "description": (
+                "Runtime-binding inspection is unavailable until trusted installation adapters are configured."
+            ),
+        }
+    },
+)
+async def get_catalog_plugin_runtime_bindings(
+    namespace: Annotated[str, Path(min_length=1, max_length=63, pattern=_IDENTIFIER_PATTERN)],
+    name: Annotated[str, Path(min_length=1, max_length=63, pattern=_IDENTIFIER_PATTERN)],
+    version: Annotated[str, Path(min_length=5, max_length=128, pattern=_VERSION_PATTERN)],
+    source_id: Annotated[
+        str,
+        Query(
+            min_length=1,
+            max_length=63,
+            pattern=_IDENTIFIER_PATTERN,
+            description="Stable catalog source identity selected by the administrator.",
+        ),
+    ],
+    browse_service: Annotated[CatalogBrowseService, Depends(get_catalog_browse_service)],
+    installation_service: Annotated[
+        CatalogPluginInstallationService,
+        Depends(get_catalog_plugin_installation_service),
+    ],
+) -> CatalogPluginRuntimeBindingPreviewRead:
+    """Inspect trusted binding metadata without approving or installing the plugin."""
+    selected = await browse_service.get_plugin_version(namespace, name, version, source_id=source_id)
+    preview = await installation_service.inspect_runtime_bindings(selected.id)
+    return CatalogPluginRuntimeBindingPreviewRead(
+        catalog_plugin_version_id=preview.catalog_plugin_version_id,
+        artifact_digest=preview.artifact_digest,
+        status=preview.status,
+        workload_ids=list(preview.workload_ids),
+        missing_workload_ids=list(preview.missing_workload_ids),
+        runtime_bindings=[
+            CatalogRuntimeBindingRead(
+                binding_digest=binding.binding_digest,
+                binding_index_digest=binding.binding_index_digest,
+                binding_index_generation=binding.binding_index_generation,
+                workload_id=binding.workload_id,
+                default_option=binding.default_option,
+                options=[
+                    CatalogRuntimeBindingOptionRead(
+                        name=option.name,
+                        display_name=option.display_name,
+                        description=option.description,
+                        image_digest=option.image_digest,
+                    )
+                    for option in binding.options
+                ],
+                verification_summary=binding.verification_summary,
+            )
+            for binding in preview.runtime_bindings
+        ],
+    )
 
 
 @router.get(

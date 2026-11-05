@@ -236,13 +236,14 @@ def build_local_poc_catalog_installation_service(
     *,
     registry_client: OciDistributionClient,
 ) -> CatalogPluginInstallationService:
-    """Compose the narrow local installer for platform-runner catalog entries.
+    """Compose the local-PoC installer for trusted platform and publisher runtimes.
 
     The caller owns the OCI client's lifetime.  Installation still reads only
     the catalog-selected immutable artifact digest, verifies all artifact
-    bytes, and resolves a runner image from the database-backed profile
-    registry.  The plugin artifact, browser, and workflow cannot select an
-    image route.
+    bytes, and resolves platform runners from the database-backed profile
+    registry. Publisher workload images must be digest-pinned and hosted by the
+    configured local registry. This unsigned local profile is not production
+    trust policy.
     """
     return CatalogPluginInstallationService(
         session,

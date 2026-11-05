@@ -240,6 +240,38 @@ class CatalogPluginInstallRead(SQLModel):
     )
 
 
+class CatalogRuntimeBindingOptionRead(SQLModel):
+    """One validated, admitted workload-image choice shown before plugin install."""
+
+    name: str
+    display_name: str
+    description: str | None = None
+    image_digest: str
+
+
+class CatalogRuntimeBindingRead(SQLModel):
+    """Latest verified RuntimeBinding for one workload in a catalog release."""
+
+    binding_digest: str
+    binding_index_digest: str
+    binding_index_generation: int = Field(ge=1)
+    workload_id: str
+    default_option: str
+    options: list[CatalogRuntimeBindingOptionRead]
+    verification_summary: dict[str, object] = Field(default_factory=dict)
+
+
+class CatalogPluginRuntimeBindingPreviewRead(SQLModel):
+    """Read-only preview of validated runtime bindings for a catalog release."""
+
+    catalog_plugin_version_id: UUID
+    artifact_digest: str
+    status: Literal["not-required", "available", "missing", "incomplete"]
+    workload_ids: list[str]
+    missing_workload_ids: list[str]
+    runtime_bindings: list[CatalogRuntimeBindingRead]
+
+
 class CatalogPluginDetailRead(SQLModel):
     """All currently visible versions of one namespaced catalog plugin."""
 

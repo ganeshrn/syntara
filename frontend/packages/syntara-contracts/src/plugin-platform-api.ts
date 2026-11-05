@@ -268,6 +268,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/catalog/plugins/{namespace}/{name}/versions/{version}/runtime-bindings': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Preview catalog plugin runtime bindings
+     * @description Inspect trusted binding metadata without approving or installing the plugin.
+     */
+    get: operations['get_catalog_plugin_runtime_bindings']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/catalog/plugins/{namespace}/{name}/versions/{version}/documentation': {
     parameters: {
       query?: never
@@ -594,6 +614,62 @@ export interface components {
        * Format: date-time
        */
       updated_at: string
+    }
+    /**
+     * CatalogRuntimeBindingOptionRead
+     * @description One validated, admitted workload-image choice shown before plugin install.
+     */
+    CatalogRuntimeBindingOptionRead: {
+      /** Name */
+      name: string
+      /** Display Name */
+      display_name: string
+      /** Description */
+      description?: string | null
+      /** Image Digest */
+      image_digest: string
+    }
+    /**
+     * CatalogRuntimeBindingRead
+     * @description Latest verified RuntimeBinding for one workload in a catalog release.
+     */
+    CatalogRuntimeBindingRead: {
+      /** Binding Digest */
+      binding_digest: string
+      /** Binding Index Digest */
+      binding_index_digest: string
+      /** Binding Index Generation */
+      binding_index_generation: number
+      /** Workload Id */
+      workload_id: string
+      /** Default Option */
+      default_option: string
+      /** Options */
+      options: components['schemas']['CatalogRuntimeBindingOptionRead'][]
+      /** Verification Summary */
+      verification_summary?: {
+        [key: string]: unknown
+      }
+    }
+    /**
+     * CatalogPluginRuntimeBindingPreviewRead
+     * @description Read-only preview of validated runtime bindings for a catalog release.
+     */
+    CatalogPluginRuntimeBindingPreviewRead: {
+      /** Catalog Plugin Version Id
+       * Format: uuid
+       */
+      catalog_plugin_version_id: string
+      /** Artifact Digest */
+      artifact_digest: string
+      /** @enum {string} */
+      status: 'not-required' | 'available' | 'missing' | 'incomplete'
+      /** Workload Ids */
+      workload_ids: string[]
+      /** Missing Workload Ids */
+      missing_workload_ids: string[]
+      /** Runtime Bindings */
+      runtime_bindings: components['schemas']['CatalogRuntimeBindingRead'][]
     }
     /**
      * CatalogPluginDocumentationRead
@@ -1912,6 +1988,50 @@ export interface operations {
       422: components['responses']['ValidationError']
       429: components['responses']['RateLimitError']
       500: components['responses']['InternalServerError']
+    }
+  }
+  get_catalog_plugin_runtime_bindings: {
+    parameters: {
+      query: {
+        /** @description Stable catalog source identity selected by the administrator. */
+        source_id: string
+      }
+      header?: never
+      path: {
+        namespace: string
+        name: string
+        version: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Verified, admitted workload image options for one catalog plugin release */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CatalogPluginRuntimeBindingPreviewRead']
+        }
+      }
+      400: components['responses']['BadRequestError']
+      401: components['responses']['UnauthorizedError']
+      403: components['responses']['ForbiddenError']
+      404: components['responses']['NotFoundError']
+      409: components['responses']['ConflictError']
+      422: components['responses']['ValidationError']
+      429: components['responses']['RateLimitError']
+      500: components['responses']['InternalServerError']
+      /** @description Runtime-binding inspection is unavailable until trusted installation adapters are configured. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorData']
+        }
+      }
     }
   }
   get_catalog_plugin_documentation: {

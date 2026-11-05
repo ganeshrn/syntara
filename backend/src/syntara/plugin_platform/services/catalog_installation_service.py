@@ -111,6 +111,7 @@ _ACTION_TARGET_KEYS = {
     "output",
     "runtime",
     "sourcePath",
+    "step_revision_id",
     "version",
 }
 _ACTION_TARGET_KEYS_WITH_INTEGRATION = _ACTION_TARGET_KEYS | {"integrationType"}
@@ -194,6 +195,18 @@ class CatalogPluginInstallResult:
     plugin_installation_id: UUID
     registry_generation: int
     idempotent: bool
+
+
+@dataclass(frozen=True)
+class CatalogPluginRuntimeBindingPreview:
+    """Validated runtime image choices for one catalog release, without installing it."""
+
+    catalog_plugin_version_id: UUID
+    artifact_digest: str
+    status: Literal["not-required", "available", "missing", "incomplete"]
+    workload_ids: tuple[str, ...]
+    missing_workload_ids: tuple[str, ...]
+    runtime_bindings: tuple[RuntimeBindingCandidate, ...]
 
 
 @dataclass(frozen=True)
@@ -374,6 +387,177 @@ class CatalogPluginInstallationService:
             await self._session.rollback()
             raise
         return _result_from_install(version.id, installed)
+
+    async def inspect_runtime_bindings(
+        self,
+        catalog_plugin_version_id: UUID,
+    ) -> CatalogPluginRuntimeBindingPreview:
+        """Validate and preview the latest binding for a catalog release without installing it."""
+        version, source = await self._active_version_and_source(catalog_plugin_version_id)
+        source_fingerprint = catalog_source_fingerprint(source)
+        _require_repository_scope(version.artifact_repository, source.repository_scopes)
+        locator = PluginArtifactLocator(source.registry_origin, version.artifact_repository)
+        access_request = CatalogRegistryAuthorizationRequest(
+            source_id=source.source_id,
+            registry_origin=source.registry_origin,
+            repository=version.artifact_repository,
+            credential_ref=source.credential_ref,
+            custom_ca_ref=source.custom_ca_ref,
+            source_mode=source.source_mode,
+        )
+        authorization = await self._authorization_resolver.resolve_authorization(access_request)
+        tls_context = await self._tls_context_resolver.resolve_tls_context(access_request)
+        validate_registry_authorization(authorization)
+
+        resolved = await self._registry_client.fetch_plugin_artifact_manifest(
+            locator,
+            digest=version.artifact_digest,
+            authorization_header=authorization,
+            tls_context=tls_context,
+        )
+        manifest_plan = self._artifact_verifier.inspect_manifest(
+            PluginArtifactInput(
+                artifact_repository=version.artifact_repository,
+                artifact_digest=version.artifact_digest,
+                manifest_bytes=resolved.manifest_bytes,
+                blobs={},
+            )
+        )
+        await self._artifact_trust_evaluator.evaluate_plugin_artifact(
+            PluginArtifactTrustRequest(
+                source_id=source.source_id,
+                registry_origin=source.registry_origin,
+                artifact_repository=version.artifact_repository,
+                artifact_digest=version.artifact_digest,
+                namespace=version.namespace,
+                name=version.name,
+                version=version.version,
+                trust_policy_ref=source.trust_policy_ref,
+                mirror_policy=source.mirror_policy,
+                source_mode=source.source_mode,
+            )
+        )
+        blobs = {
+            manifest_plan.config_descriptor.digest: await self._registry_client.fetch_blob(
+                locator,
+                digest=manifest_plan.config_descriptor.digest,
+                maximum_bytes=manifest_plan.config_descriptor.size,
+                authorization_header=authorization,
+                tls_context=tls_context,
+            ),
+            manifest_plan.plugin_manifest_descriptor.digest: await self._registry_client.fetch_blob(
+                locator,
+                digest=manifest_plan.plugin_manifest_descriptor.digest,
+                maximum_bytes=manifest_plan.plugin_manifest_descriptor.size,
+                authorization_header=authorization,
+                tls_context=tls_context,
+            ),
+            manifest_plan.content_bundle_descriptor.digest: await self._registry_client.fetch_blob(
+                locator,
+                digest=manifest_plan.content_bundle_descriptor.digest,
+                maximum_bytes=manifest_plan.content_bundle_descriptor.size,
+                authorization_header=authorization,
+                tls_context=tls_context,
+            ),
+        }
+        artifact = self._artifact_verifier.verify(
+            PluginArtifactInput(
+                artifact_repository=version.artifact_repository,
+                artifact_digest=version.artifact_digest,
+                manifest_bytes=resolved.manifest_bytes,
+                blobs=blobs,
+            )
+        )
+        _require_artifact_identity(artifact.canonical_descriptor, version)
+        specification = _mapping(artifact.canonical_descriptor.get("spec"), "plugin specification")
+        workload_ids = tuple(sorted(_mapping(specification.get("workloads", {}), "plugin workloads")))
+        if not workload_ids:
+            await self._require_source_unchanged(
+                version,
+                source_database_id=source.id,
+                source_fingerprint=source_fingerprint,
+            )
+            return CatalogPluginRuntimeBindingPreview(
+                catalog_plugin_version_id=version.id,
+                artifact_digest=version.artifact_digest,
+                status="not-required",
+                workload_ids=(),
+                missing_workload_ids=(),
+                runtime_bindings=(),
+            )
+
+        binding_release = await self._load_latest_runtime_binding(
+            artifact.canonical_descriptor,
+            version,
+            source,
+            plugin_manifest_bytes=resolved.manifest_bytes,
+            locator=locator,
+            authorization=authorization,
+            tls_context=tls_context,
+        )
+        candidates: list[RuntimeBindingCandidate] = []
+        missing_workload_ids = workload_ids
+        if binding_release is not None:
+            binding_images = {
+                _string(option.get("image"), "runtime-binding image")
+                for workload in binding_release.workloads.values()
+                for option in workload["options"]
+            }
+            admissions: dict[str, Mapping[str, str | int | bool | None]] = {}
+            for image_digest in sorted(binding_images):
+                decision = await self._workload_image_evaluator.evaluate_workload_image(
+                    WorkloadImageAdmissionRequest(
+                        source_id=source.source_id,
+                        registry_origin=source.registry_origin,
+                        artifact_repository=version.artifact_repository,
+                        artifact_digest=version.artifact_digest,
+                        namespace=version.namespace,
+                        name=version.name,
+                        version=version.version,
+                        image_digest=image_digest,
+                        runtime_abi=_CONTAINER_ABI,
+                        trust_policy_ref=source.trust_policy_ref,
+                        mirror_policy=source.mirror_policy,
+                    )
+                )
+                admissions[image_digest] = safe_trust_summary(decision.summary)
+            for workload_id in sorted(set(workload_ids) & set(binding_release.workloads)):
+                candidate = _runtime_binding_candidate(binding_release, workload_id)
+                candidates.append(
+                    candidate.model_copy(
+                        update={
+                            "verification_summary": {
+                                "binding": dict(binding_release.binding_trust),
+                                "bindingIndex": dict(binding_release.index_trust),
+                                "imageAdmissions": {
+                                    option.image_digest: dict(admissions[option.image_digest])
+                                    for option in candidate.options
+                                },
+                            }
+                        }
+                    )
+                )
+            missing_workload_ids = tuple(sorted(set(workload_ids) - set(binding_release.workloads)))
+
+        await self._require_source_unchanged(
+            version,
+            source_database_id=source.id,
+            source_fingerprint=source_fingerprint,
+        )
+        if not candidates:
+            status: Literal["not-required", "available", "missing", "incomplete"] = "missing"
+        elif missing_workload_ids:
+            status = "incomplete"
+        else:
+            status = "available"
+        return CatalogPluginRuntimeBindingPreview(
+            catalog_plugin_version_id=version.id,
+            artifact_digest=version.artifact_digest,
+            status=status,
+            workload_ids=workload_ids,
+            missing_workload_ids=missing_workload_ids,
+            runtime_bindings=tuple(candidates),
+        )
 
     async def _load_latest_runtime_binding(
         self,
@@ -888,6 +1072,9 @@ def _action_from_target(
             display_name=_string(target_metadata.get("displayName"), "action display name"),
             description=_string(target_metadata.get("description"), "action description"),
             revision_digest=_canonical_digest(target),
+            step_revision_id=_string(target.get("step_revision_id"), "action step revision ID")
+            if "step_revision_id" in target
+            else None,
             runtime_kind="custom-workload",
             runtime_abi=_CONTAINER_ABI,
             image_digest=image_digest,
@@ -937,6 +1124,9 @@ def _platform_runner_action(
                 _mapping(target.get("metadata"), "action metadata").get("description"), "action description"
             ),
             revision_digest=_canonical_digest(definition),
+            step_revision_id=_string(target.get("step_revision_id"), "action step revision ID")
+            if "step_revision_id" in target
+            else None,
             runtime_kind="platform-runner",
             runtime_abi=profile.runtime_abi,
             image_digest=profile.image_digest,
@@ -1291,7 +1481,16 @@ def _owned_type_id(value: object, version: CatalogPluginVersion, context: str) -
 
 def _require_keys(value: Mapping[str, Any], expected: set[str], context: str) -> None:
     if set(value) != expected:
-        _unsupported_descriptor(context)
+        actual = set(value)
+        missing = sorted(expected - actual)
+        unsupported = sorted(actual - expected)
+        details = []
+        if missing:
+            details.append(f"missing fields: {', '.join(missing)}")
+        if unsupported:
+            details.append(f"unsupported fields: {', '.join(unsupported)}")
+        message = f"Catalog plugin contains an unsupported {context} ({'; '.join(details)})"
+        raise CatalogSourceConfigurationError(message)
 
 
 def _canonical_digest(value: Mapping[str, Any]) -> str:

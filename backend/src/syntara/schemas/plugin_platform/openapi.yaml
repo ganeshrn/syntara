@@ -809,6 +809,78 @@ paths:
         "429": *rate_limit
         "500": *internal_error
 
+  /catalog/plugins/{namespace}/{name}/versions/{version}/runtime-bindings:
+    get:
+      summary: Preview catalog plugin runtime bindings
+      description: Inspect trusted binding metadata without approving or installing the plugin.
+      operationId: get_catalog_plugin_runtime_bindings
+      tags:
+        - Plugin Platform
+      x-app-permission:
+        resource: plugin_catalog
+        action: read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 63
+            pattern: "^[a-z][a-z0-9-]{0,62}$"
+            title: Namespace
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 63
+            pattern: "^[a-z][a-z0-9-]{0,62}$"
+            title: Name
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 5
+            maxLength: 128
+            pattern: "^(?:0|[1-9][0-9]*)\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+            title: Version
+        - name: source_id
+          in: query
+          required: true
+          description: Stable catalog source identity selected by the administrator.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 63
+            pattern: "^[a-z][a-z0-9-]{0,62}$"
+            title: Source Id
+      responses:
+        "200":
+          description: Verified, admitted workload image options for one catalog plugin release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogPluginRuntimeBindingPreviewRead"
+        "400": *bad_request
+        "401": *unauthorized
+        "403": *forbidden
+        "404": *not_found
+        "409": *conflict
+        "422": *validation_error
+        "429": *rate_limit
+        "500": *internal_error
+        "503":
+          description: Runtime-binding inspection is unavailable until trusted installation adapters are configured.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "../base/shared-resources.openapi.yaml#/components/schemas/ErrorData"
+
   /catalog/plugins/{namespace}/{name}/versions/{version}/documentation:
     get:
       summary: Get catalog plugin documentation
@@ -1469,6 +1541,111 @@ components:
           type: string
           format: date-time
           title: Updated At
+
+    CatalogRuntimeBindingOptionRead:
+      type: object
+      title: CatalogRuntimeBindingOptionRead
+      description: One validated, admitted workload-image choice shown before plugin install.
+      required:
+        - name
+        - display_name
+        - image_digest
+      properties:
+        name:
+          type: string
+          title: Name
+        display_name:
+          type: string
+          title: Display Name
+        description:
+          anyOf:
+            - type: string
+            - type: "null"
+          title: Description
+        image_digest:
+          type: string
+          title: Image Digest
+
+    CatalogRuntimeBindingRead:
+      type: object
+      title: CatalogRuntimeBindingRead
+      description: Latest verified RuntimeBinding for one workload in a catalog release.
+      required:
+        - binding_digest
+        - binding_index_digest
+        - binding_index_generation
+        - workload_id
+        - default_option
+        - options
+      properties:
+        binding_digest:
+          type: string
+          title: Binding Digest
+        binding_index_digest:
+          type: string
+          title: Binding Index Digest
+        binding_index_generation:
+          type: integer
+          minimum: 1
+          title: Binding Index Generation
+        workload_id:
+          type: string
+          title: Workload Id
+        default_option:
+          type: string
+          title: Default Option
+        options:
+          type: array
+          title: Options
+          items:
+            $ref: "#/components/schemas/CatalogRuntimeBindingOptionRead"
+        verification_summary:
+          type: object
+          additionalProperties: true
+          title: Verification Summary
+
+    CatalogPluginRuntimeBindingPreviewRead:
+      type: object
+      title: CatalogPluginRuntimeBindingPreviewRead
+      description: Read-only preview of validated runtime bindings for a catalog release.
+      required:
+        - catalog_plugin_version_id
+        - artifact_digest
+        - status
+        - workload_ids
+        - missing_workload_ids
+        - runtime_bindings
+      properties:
+        catalog_plugin_version_id:
+          type: string
+          format: uuid
+          title: Catalog Plugin Version Id
+        artifact_digest:
+          type: string
+          title: Artifact Digest
+        status:
+          type: string
+          enum:
+            - not-required
+            - available
+            - missing
+            - incomplete
+          title: Status
+        workload_ids:
+          type: array
+          items:
+            type: string
+          title: Workload Ids
+        missing_workload_ids:
+          type: array
+          items:
+            type: string
+          title: Missing Workload Ids
+        runtime_bindings:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogRuntimeBindingRead"
+          title: Runtime Bindings
 
     CatalogPluginDocumentationRead:
       type: object

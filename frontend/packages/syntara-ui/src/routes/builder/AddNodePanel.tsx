@@ -6,7 +6,7 @@ import { SynPanel } from '../../components/layout/SynPanel'
 
 import { NodeTypeOptionsList } from './NodeTypeOptionsList'
 import { NodeRegistry } from './registry/NodeRegistry'
-import { INSTALLED_ACTION_NODE_PREFIX, useInstalledActionNodes } from './registry/useInstalledActionNodes'
+import { INSTALLED_ACTION_NODE_PREFIX, type InstalledActionNodeDefinition } from './registry/useInstalledActionNodes'
 
 type AddNodePanelHeaderProps = {
   panelTitle: string
@@ -74,6 +74,7 @@ export function AddNodePanelHeader({
 type AddNodePanelProps = {
   onClose: () => void
   onSelectNode: (nodeTypeId: string, nodeSubtypeId?: string | null) => void
+  installedActionNodes?: readonly InstalledActionNodeDefinition[]
   sourceNodeId?: string | null
   /** Canvas has no workflow steps yet (only trigger selection is shown). */
   hasNoWorkflowNodes?: boolean
@@ -83,7 +84,6 @@ type AddNodePanelProps = {
 
 export function AddNodePanel(props: AddNodePanelProps) {
   const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null)
-  const installedActionNodes = useInstalledActionNodes()
 
   // Registered step types from NodeRegistry
   // Omit triggers when adding from an edge (sourceNodeId) or replacing a generic step (replacementNodeId)
@@ -91,7 +91,7 @@ export function AddNodePanel(props: AddNodePanelProps) {
   const nodeTypes = useMemo(() => {
     const allNodes = [
       ...NodeRegistry.getAll().filter((node) => !node.id.startsWith(INSTALLED_ACTION_NODE_PREFIX)),
-      ...installedActionNodes,
+      ...(props.installedActionNodes ?? []),
     ]
     if (props.hasNoWorkflowNodes) {
       return allNodes.filter((node) => node.category === 'trigger')
@@ -100,7 +100,7 @@ export function AddNodePanel(props: AddNodePanelProps) {
       return allNodes.filter((node) => node.category !== 'trigger')
     }
     return allNodes
-  }, [installedActionNodes, props.replacementNodeId, props.hasNoWorkflowNodes, props.sourceNodeId])
+  }, [props.installedActionNodes, props.replacementNodeId, props.hasNoWorkflowNodes, props.sourceNodeId])
 
   const handleNodeClick = (nodeId: string) => {
     const nodeDef = NodeRegistry.get(nodeId)

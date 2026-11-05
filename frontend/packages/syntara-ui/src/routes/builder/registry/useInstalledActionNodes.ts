@@ -19,6 +19,7 @@ export const INSTALLED_ACTION_NODE_PREFIX = 'installed-plugin-action:'
 
 type InstalledPlugin = PluginPlatformAPI.components['schemas']['InstalledPluginRead']
 type InstalledPluginDetail = PluginPlatformAPI.components['schemas']['InstalledPluginDetailRead']
+export type InstalledActionNodeDefinition = NodeTypeDefinition<ExternalActionFormData>
 
 function nodeIdFor(action: InstalledPluginAction): string {
   return `${INSTALLED_ACTION_NODE_PREFIX}${action.step_revision_id}`
@@ -110,7 +111,7 @@ function makeNodeDefinition(
  * workflow node stores the immutable action revision, not the plugin image or
  * any registry/runtime configuration.
  */
-export function useInstalledActionNodes(): readonly NodeTypeDefinition<ExternalActionFormData>[] {
+export function useInstalledActionNodes(): readonly InstalledActionNodeDefinition[] {
   const installedQuery = pluginPlatformClient.useQuery('get', '/plugin_registry', {
     params: { query: { enabled: true, include_total: true } },
   })

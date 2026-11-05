@@ -84,6 +84,13 @@ class InstalledActionCandidate(BaseModel):
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=2_000)
     revision_digest: str = Field(min_length=71, max_length=71, pattern=_SHA256_PATTERN)
+    step_revision_id: str | None = Field(
+        default=None,
+        min_length=71,
+        max_length=71,
+        pattern=_SHA256_PATTERN,
+        description="Step revision identity supplied by the validated plugin contract, when present.",
+    )
     runtime_kind: Literal["platform-runner", "custom-workload"]
     runtime_abi: Literal["syntara.container/v1alpha1"] = "syntara.container/v1alpha1"
     image_digest: str = Field(min_length=73, max_length=512, pattern=_IMAGE_DIGEST_PATTERN)
@@ -800,7 +807,9 @@ def _qualified_name(candidate: VerifiedPluginCandidate, action: InstalledActionC
 
 
 def _step_revision_id(candidate: VerifiedPluginCandidate, action: InstalledActionCandidate) -> str:
-    """Build a bounded ABI-safe step revision ID without truncation or ambiguity."""
+    """Use the contract identity when present, otherwise build a legacy-compatible ID."""
+    if action.step_revision_id is not None:
+        return action.step_revision_id
     return f"{_qualified_name(candidate, action)}:{action.revision_digest.removeprefix('sha256:')}"
 
 

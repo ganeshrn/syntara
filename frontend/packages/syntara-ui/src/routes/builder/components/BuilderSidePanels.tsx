@@ -6,6 +6,7 @@ import type { PaginationFooterProps } from '../../../components/table/Pagination
 import type { FilterConfig } from '../../../types/filters'
 import { AddNodePanel } from '../AddNodePanel'
 import type { BuilderAction } from '../builderReducer'
+import { useInstalledActionNodes } from '../registry/useInstalledActionNodes'
 import { WorkflowHistoryCard } from '../WorkflowHistoryCard'
 import { WorkflowSidepanel } from '../WorkflowSidepanel'
 
@@ -55,11 +56,16 @@ export const BuilderSidePanels = memo(function BuilderSidePanels({
   workflowDescription,
   markDirty,
 }: Readonly<BuilderSidePanelsProps>) {
+  // Keep plugin node definitions registered when the picker closes and the
+  // node editor opens. The editor resolves the selected form from NodeRegistry.
+  const installedActionNodes = useInstalledActionNodes()
+
   return (
     <>
       {isAddNodePanelOpen && !isNodeEditorOpen && canEdit && (
         <FlexItem style={{ flexShrink: 0, alignSelf: 'stretch' }}>
           <AddNodePanel
+            installedActionNodes={installedActionNodes}
             onClose={() => dispatch({ type: 'CLOSE_ADD_NODE_PANEL' })}
             onSelectNode={(nodeTypeId, nodeSubtypeId) =>
               dispatch({

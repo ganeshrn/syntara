@@ -4,6 +4,8 @@ This module contains Pydantic models for activity executor configurations.
 These are used by V2 workflow activities for config validation.
 """
 
+from __future__ import annotations
+
 import json
 import re
 import uuid

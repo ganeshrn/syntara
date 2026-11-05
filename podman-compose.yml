@@ -153,6 +153,8 @@ services:
       - APP_CACHE_HOST=redis
       - APP_CACHE_PASSWORD=${APP_CACHE_PASSWORD:-cache}
       - APP_SERVER_PUBLIC_URL=${APP_SERVER_PUBLIC_URL:-}
+      # The local UI is served over HTTP, so auth cookies must not be Secure.
+      - APP_SERVER_SCHEME=${APP_SERVER_SCHEME:-http}
       - APP_ENV_FILE_PATH=${APP_ENV_FILE_PATH:-.env}
       - APP_FALLBACK_LOG_LEVEL=${APP_FALLBACK_LOG_LEVEL:-INFO}
       - APP_LOG_OUTPUT_FORMAT=${APP_LOG_OUTPUT_FORMAT:-text}

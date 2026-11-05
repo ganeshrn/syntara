@@ -39,6 +39,7 @@ import { useDocLink } from '../../../utils/docs/useDocLink'
 
 import { comparePluginVersions, displayPluginName, type CatalogPlugin, type InstalledPlugin } from './pluginCatalog'
 import { PluginDocumentation } from './PluginDocumentation'
+import { PluginRuntimeBindings } from './PluginRuntimeBindings'
 
 function RuntimeOwnershipBadges({ ownerships }: Readonly<{ ownerships: CatalogPlugin['runtime_ownerships'] }>) {
   return (
@@ -408,6 +409,9 @@ function PluginDetailPage({
               installedPlugins={installedPlugins}
               onSelect={onSelectVersion}
             />
+          </StackItem>
+          <StackItem>
+            <PluginRuntimeBindings plugin={selectedPlugin} />
           </StackItem>
           <StackItem>
             <WorkflowSteps actions={workflowActions} />
